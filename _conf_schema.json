@@ -1,0 +1,95 @@
+{
+  "provider": {
+    "description": "文生图/图生图服务提供商",
+    "type": "string",
+    "default": "openai",
+    "options": ["openai", "apikey", "siliconflow", "zhipu", "volcengine", "custom"],
+    "labels": ["OpenAI（国际）", "apikey.fan 聚合", "硅基流动 SiliconFlow", "智谱 AI BigModel", "火山方舟（豆包）", "自定义 / OpenAI 兼容"],
+    "hint": "选择提供商后会自动填充模型 URL 与推荐模型；自定义可填写任意 OpenAI 兼容接口。"
+  },
+  "base_url": {
+    "description": "模型服务 API 地址（Base URL）",
+    "type": "string",
+    "default": "https://api.openai.com/v1",
+    "hint": "通常以 /v1 结尾。选择内置提供商会自动填入，也可手动修改。"
+  },
+  "api_key": {
+    "description": "API Key",
+    "type": "string",
+    "default": "",
+    "secret": true,
+    "hint": "仅保存在本机插件配置中，请勿泄露。"
+  },
+  "model": {
+    "description": "默认模型",
+    "type": "string",
+    "default": "gpt-image-1",
+    "hint": "可留空使用提供商默认模型，或在可视化视图中点击“检测可用模型”后选择。"
+  },
+  "size": {
+    "description": "图片尺寸",
+    "type": "string",
+    "default": "1024x1024",
+    "options": ["1024x1024", "1024x1536", "1536x1024", "768x1024", "1024x768", "512x512", "2048x2048", "auto"],
+    "hint": "部分模型只支持特定尺寸。"
+  },
+  "quality": {
+    "description": "图片质量",
+    "type": "string",
+    "default": "auto",
+    "options": ["auto", "high", "medium", "low"],
+    "hint": "部分模型不支持该参数，可忽略。"
+  },
+  "n": {
+    "description": "生成数量",
+    "type": "int",
+    "default": 1,
+    "slider": {"min": 1, "max": 4, "step": 1}
+  },
+  "stream": {
+    "description": "启用 SSE 流式返回",
+    "type": "bool",
+    "default": false,
+    "hint": "apikey.fan 的 gpt-image-2 等模型需要开启流式；其它提供商通常关闭即可。"
+  },
+  "response_format": {
+    "description": "返回格式",
+    "type": "string",
+    "default": "b64_json",
+    "options": ["b64_json", "url"],
+    "hint": "b64_json 最通用，便于直接保存和发送图片。"
+  },
+  "t2i_path": {
+    "description": "文生图接口路径",
+    "type": "string",
+    "default": "/images/generations"
+  },
+  "i2i_path": {
+    "description": "图生图接口路径",
+    "type": "string",
+    "default": "/images/edits"
+  },
+  "timeout": {
+    "description": "请求超时（秒）",
+    "type": "int",
+    "default": 300,
+    "slider": {"min": 10, "max": 900, "step": 10}
+  },
+  "allow_commands": {
+    "description": "启用聊天指令（/文生图、/图生图）",
+    "type": "bool",
+    "default": true
+  },
+  "register_llm_tools": {
+    "description": "向 AI 智能体注册文生图/图生图工具",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，机器人在对话中可按需调用 text_to_image 与 image_to_image 工具。"
+  },
+  "allowed_users": {
+    "description": "允许使用指令的用户（留空表示所有人）",
+    "type": "list",
+    "default": [],
+    "_special": "sender_id"
+  }
+}

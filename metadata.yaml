@@ -1,0 +1,6 @@
+name: astrbot_plugin_image_studio
+desc: 多服务商文生图与图生图工具。配置模型 URL 与 API Key 后即可测试、检测可用模型并保存配置，为机器人提供文生图/图生图指令与 LLM 工具。
+short_desc: 多服务商文生图与图生图工具
+display_name: 图像工坊 Image Studio
+author: Codex
+version: 1.0.0

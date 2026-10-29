@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>图像工坊设置</title>
+    <style>
+      :root {
+        --bg: #f7f8fa;
+        --card: #ffffff;
+        --text: #1c1e21;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #4f46e5;
+        --accent-hover: #4338ca;
+        --danger: #dc2626;
+        --ok: #16a34a;
+        --input-bg: #ffffff;
+      }
+      [data-theme="dark"] {
+        --bg: #14161a;
+        --card: #1d2026;
+        --text: #e6e8eb;
+        --muted: #9aa1ab;
+        --border: #2c313a;
+        --accent: #6366f1;
+        --accent-hover: #818cf8;
+        --danger: #f87171;
+        --ok: #4ade80;
+        --input-bg: #12141a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+        font-size: 14px;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 48px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .subtitle { color: var(--muted); margin: 0 0 20px; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 16px;
+      }
+      .card h2 { font-size: 15px; margin: 0 0 14px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .grid .full { grid-column: 1 / -1; }
+      .field { display: flex; flex-direction: column; gap: 6px; }
+      label { font-size: 12px; color: var(--muted); }
+      input, select, textarea {
+        background: var(--input-bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 10px;
+        font-size: 14px;
+        width: 100%;
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      textarea { resize: vertical; min-height: 80px; }
+      .key-row { display: flex; gap: 8px; }
+      .key-row input { flex: 1; }
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 14px;
+        font-size: 14px;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+      }
+      button:hover { background: var(--accent-hover); }
+      button.secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      button.secondary:hover { background: var(--border); }
+      button.primary { font-weight: 600; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .hint { font-size: 12px; color: var(--muted); }
+      .status { padding: 10px 12px; border-radius: 8px; margin: 12px 0; display: none; }
+      .status.ok { display: block; background: rgba(22,163,74,.12); color: var(--ok); }
+      .status.err { display: block; background: rgba(220,38,38,.12); color: var(--danger); }
+      .status.info { display: block; background: rgba(79,70,229,.12); color: var(--accent); }
+      .preview {
+        margin-top: 14px;
+        display: none;
+      }
+      .preview.show { display: block; }
+      .preview img {
+        max-width: 100%;
+        max-height: 420px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+      }
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .toggle input { width: auto; }
+      .actions { display: flex; gap: 10px; margin-top: 18px; }
+      .model-row { display: flex; gap: 8px; }
+      .model-row input { flex: 1; }
+      @media (max-width: 640px) {
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>图像工坊设置</h1>
+      <p class="subtitle">配置文生图 / 图生图服务。可先测试，测试通过后再保存配置。</p>
+
+      <section class="card">
+        <h2>1 · 服务与密钥</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="provider">服务提供商</label>
+            <select id="provider"></select>
+          </div>
+          <div class="field">
+            <label for="base_url">Base URL</label>
+            <input id="base_url" placeholder="https://api.example.com/v1" />
+          </div>
+          <div class="field full">
+            <label for="api_key">API Key</label>
+            <div class="key-row">
+              <input id="api_key" type="password" placeholder="sk-..." autocomplete="off" />
+              <button id="toggle_key" class="secondary" type="button">显示</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="model">模型</label>
+            <div class="model-row">
+              <input id="model" list="modelOptions" placeholder="留空使用默认模型" />
+              <button id="detect" class="secondary" type="button">检测可用模型</button>
+            </div>
+            <datalist id="modelOptions"></datalist>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2 · 生成参数</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="size">图片尺寸</label>
+            <select id="size">
+              <option value="1024x1024">1024x1024</option>
+              <option value="1024x1536">1024x1536</option>
+              <option value="1536x1024">1536x1024</option>
+              <option value="768x1024">768x1024</option>
+              <option value="1024x768">1024x768</option>
+              <option value="512x512">512x512</option>
+              <option value="2048x2048">2048x2048</option>
+              <option value="auto">auto</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="quality">质量</label>
+            <select id="quality">
+              <option value="auto">auto</option>
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="n">生成数量</label>
+            <input id="n" type="number" min="1" max="4" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label for="response_format">返回格式</label>
+            <select id="response_format">
+              <option value="b64_json">b64_json</option>
+              <option value="url">url</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="toggle">
+              <input id="stream" type="checkbox" /> 启用 SSE 流式返回
+            </label>
+            <span class="hint">apikey.fan 的 gpt-image-2 建议开启。</span>
+          </div>
+        </div>
+
+        <details style="margin-top: 14px;">
+          <summary style="cursor: pointer; color: var(--muted); font-size: 12px;">高级参数</summary>
+          <div class="grid" style="margin-top: 12px;">
+            <div class="field">
+              <label for="t2i_path">文生图路径</label>
+              <input id="t2i_path" value="/images/generations" />
+            </div>
+            <div class="field">
+              <label for="i2i_path">图生图路径</label>
+              <input id="i2i_path" value="/images/edits" />
+            </div>
+            <div class="field">
+              <label for="timeout">超时（秒）</label>
+              <input id="timeout" type="number" min="10" max="900" step="10" value="300" />
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>3 · 测试</h2>
+        <div class="row">
+          <label class="toggle"><input type="radio" name="mode" value="text" checked /> 文生图</label>
+          <label class="toggle"><input type="radio" name="mode" value="image" /> 图生图</label>
+        </div>
+        <div class="field" style="margin-top: 12px;">
+          <label for="prompt">测试 Prompt</label>
+          <textarea id="prompt" placeholder="例如：生成一只太空猫"></textarea>
+        </div>
+        <div class="field" id="imageField" style="margin-top: 12px; display: none;">
+          <label for="refImage">参考图片</label>
+          <input id="refImage" type="file" accept="image/*" />
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button id="run_test" class="primary" type="button">开始测试</button>
+          <span class="hint">测试会直接使用上方填写的地址、密钥与参数。</span>
+        </div>
+        <div id="status" class="status"></div>
+        <div id="preview" class="preview"></div>
+      </section>
+
+      <section class="card">
+        <h2>4 · 行为选项</h2>
+        <div class="grid">
+          <div class="field">
+            <label class="toggle"><input id="allow_commands" type="checkbox" checked /> 启用 /文生图、/图生图 指令</label>
+          </div>
+          <div class="field">
+            <label class="toggle"><input id="register_llm_tools" type="checkbox" checked /> 向 AI 注册文生图/图生图工具</label>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="save" class="primary" type="button">保存配置</button>
+          <span class="hint" id="saveHint"></span>
+        </div>
+      </section>
+    </div>
+
+    <script type="module">
+      const bridge = window.AstrBotPluginView;
+      const ctx = await bridge.ready();
+
+      const $ = (id) => document.getElementById(id);
+      const status = $("status");
+      const preview = $("preview");
+
+      let providers = [];
+
+      function setStatus(msg, type) {
+        status.className = "status " + type;
+        status.textContent = msg;
+      }
+      function clearStatus() {
+        status.className = "status";
+        status.textContent = "";
+      }
+
+      function fillModelOptions(models) {
+        const dl = $("modelOptions");
+        dl.innerHTML = "";
+        for (const m of models || []) {
+          const opt = document.createElement("option");
+          opt.value = m;
+          dl.appendChild(opt);
+        }
+      }
+
+      function onProviderChange() {
+        const p = providers.find((x) => x.id === $("provider").value);
+        if (!p) return;
+        $("base_url").value = p.base_url || "";
+        $("model").value = p.default_model || "";
+        $("stream").checked = !!p.stream;
+        fillModelOptions(p.models || []);
+      }
+
+      function collectConfig() {
+        return {
+          provider: $("provider").value,
+          base_url: $("base_url").value.trim(),
+          api_key: $("api_key").value.trim(),
+          model: $("model").value.trim(),
+          size: $("size").value,
+          quality: $("quality").value,
+          n: parseInt($("n").value, 10) || 1,
+          stream: $("stream").checked,
+          response_format: $("response_format").value,
+          t2i_path: $("t2i_path").value.trim() || "/images/generations",
+          i2i_path: $("i2i_path").value.trim() || "/images/edits",
+          timeout: parseInt($("timeout").value, 10) || 300,
+          allow_commands: $("allow_commands").checked,
+          register_llm_tools: $("register_llm_tools").checked,
+          allowed_users: [],
+        };
+      }
+
+      function applyConfig(cfg) {
+        if (!cfg) return;
+        $("provider").value = cfg.provider || "openai";
+        $("base_url").value = cfg.base_url || "";
+        $("api_key").value = cfg.api_key || "";
+        $("model").value = cfg.model || "";
+        $("size").value = cfg.size || "1024x1024";
+        $("quality").value = cfg.quality || "auto";
+        $("n").value = cfg.n || 1;
+        $("stream").checked = !!cfg.stream;
+        $("response_format").value = cfg.response_format || "b64_json";
+        $("t2i_path").value = cfg.t2i_path || "/images/generations";
+        $("i2i_path").value = cfg.i2i_path || "/images/edits";
+        $("timeout").value = cfg.timeout || 300;
+        $("allow_commands").checked = cfg.allow_commands !== false;
+        $("register_llm_tools").checked = cfg.register_llm_tools !== false;
+      }
+
+      // 模式切换
+      document.querySelectorAll('input[name="mode"]').forEach((r) => {
+        r.addEventListener("change", () => {
+          $("imageField").style.display = r.value === "image" ? "flex" : "none";
+        });
+      });
+
+      $("provider").addEventListener("change", onProviderChange);
+      $("toggle_key").addEventListener("click", () => {
+        const inp = $("api_key");
+        const show = inp.type === "password";
+        inp.type = show ? "text" : "password";
+        $("toggle_key").textContent = show ? "隐藏" : "显示";
+      });
+
+      $("detect").addEventListener("click", async () => {
+        const base_url = $("base_url").value.trim();
+        if (!base_url) {
+          setStatus("请先填写 Base URL", "err");
+          return;
+        }
+        setStatus("正在检测可用模型…", "info");
+        try {
+          const res = await bridge.apiPost("models", {
+            base_url,
+            api_key: $("api_key").value.trim(),
+            timeout: parseInt($("timeout").value, 10) || 60,
+          });
+          const models = res.models || [];
+          fillModelOptions(models);
+          if (!$("model").value && models.length) {
+            $("model").value = models[0];
+          }
+          setStatus("检测到 " + models.length + " 个模型", "ok");
+        } catch (e) {
+          setStatus("检测失败：" + (e.message || e), "err");
+        }
+      });
+
+      $("run_test").addEventListener("click", async () => {
+        clearStatus();
+        preview.className = "preview";
+        preview.innerHTML = "";
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const prompt = $("prompt").value.trim();
+        if (!prompt) {
+          setStatus("请先填写测试 Prompt", "err");
+          return;
+        }
+        const body = collectConfig();
+        body.mode = mode;
+        body.prompt = prompt;
+        if (mode === "image") {
+          const file = $("refImage").files && $("refImage").files[0];
+          if (!file) {
+            setStatus("请先选择参考图片", "err");
+            return;
+          }
+          body.image_b64 = await fileToBase64(file);
+        }
+        setStatus("正在生成，请稍候…", "info");
+        try {
+          const res = await bridge.apiPost("test", body);
+          const images = res.images || [];
+          if (!images.length) {
+            setStatus("接口未返回图片", "err");
+            return;
+          }
+          preview.className = "preview show";
+          for (const img of images) {
+            if (img.b64) {
+              const mime = img.mime || "image/png";
+              const el = document.createElement("img");
+              el.src = "data:" + mime + ";base64," + img.b64;
+              preview.appendChild(el);
+            } else if (img.url) {
+              const el = document.createElement("img");
+              el.src = img.url;
+              preview.appendChild(el);
+            }
+          }
+          setStatus("测试成功，可以保存配置。", "ok");
+        } catch (e) {
+          setStatus("测试失败：" + (e.message || e), "err");
+        }
+      });
+
+      $("save").addEventListener("click", async () => {
+        clearStatus();
+        $("saveHint").textContent = "";
+        try {
+          const res = await bridge.apiPost("config/save", collectConfig());
+          applyConfig(res.config);
+          $("saveHint").textContent = "已保存";
+          setStatus("配置已保存。", "ok");
+        } catch (e) {
+          setStatus("保存失败：" + (e.message || e), "err");
+        }
+      });
+
+      function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // 初始化
+      try {
+        const [pRes, cRes] = await Promise.all([
+          bridge.apiGet("providers"),
+          bridge.apiGet("config"),
+        ]);
+        providers = pRes.providers || [];
+        const select = $("provider");
+        for (const p of providers) {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.name;
+          select.appendChild(opt);
+        }
+        applyConfig(cRes.config);
+        // 保证 provider 下拉与预设同步（若配置来自旧版本）
+        onProviderChange();
+        // 用配置值覆盖预设自动填充，避免覆盖用户已保存的自定义值
+        applyConfig(cRes.config);
+      } catch (e) {
+        setStatus("加载配置失败：" + (e.message || e), "err");
+      }
+    </script>
+  </body>
+</html>
