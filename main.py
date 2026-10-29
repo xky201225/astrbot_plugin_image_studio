@@ -23,24 +23,13 @@ from astrbot.core.star.filter.command import GreedyStr
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .client import ImageProviderError, generate_image, list_models
+from .profiles import ProfileStore
 from .providers import PROVIDERS, PROVIDER_IDS, resolve_provider
 
 PLUGIN_NAME = "astrbot_plugin_image_studio"
 
-# 允许从可视化设置页写入并持久化的配置键。
-SAVEABLE_KEYS = [
-    "provider",
-    "base_url",
-    "api_key",
-    "model",
-    "size",
-    "quality",
-    "n",
-    "stream",
-    "response_format",
-    "t2i_path",
-    "i2i_path",
-    "timeout",
+# 插件级全局配置（多服务商档案保存在 profiles.json）。
+GLOBAL_KEYS = [
     "allow_commands",
     "register_llm_tools",
     "allowed_users",
@@ -80,8 +69,27 @@ def resolve_config(config: dict) -> dict:
     if not (cfg.get("model") or "").strip():
         cfg["model"] = preset.get("default_model") or ""
 
-    if provider_id == "apikey":
+    # 按提供商能力收敛参数。
+    if not bool(preset.get("supports_stream", True)):
+        cfg["stream"] = False
+    elif provider_id == "apikey":
         cfg["stream"] = True
+
+    max_n = int(preset.get("max_n") or 4)
+    try:
+        cfg["n"] = max(1, min(int(cfg.get("n") or 1), max_n))
+    except (TypeError, ValueError):
+        cfg["n"] = 1
+
+    cfg["supports_response_format"] = bool(
+        preset.get("supports_response_format", True)
+    )
+    cfg["supports_output_format"] = bool(
+        preset.get("supports_output_format", False)
+    )
+    cfg["output_format"] = str(cfg.get("output_format") or "png").strip().lower()
+    if cfg.get("output_compression") is None:
+        cfg["output_compression"] = 90
 
     return cfg
 
@@ -90,6 +98,9 @@ class ImageStudioPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context, config)
         self.config = config
+
+        self.profile_store = ProfileStore(self._data_dir())
+        self.profile_store.ensure_from_legacy(dict(self.config))
 
         self._register_web_apis()
         logger.info(f"{PLUGIN_NAME} 已加载。")
@@ -103,7 +114,11 @@ class ImageStudioPlugin(Star):
         return path
 
     def _runtime_cfg(self) -> dict:
-        return resolve_config(dict(self.config))
+        try:
+            profile = self.profile_store.get_active()
+        except Exception:  # noqa: BLE001
+            profile = dict(self.config)
+        return resolve_config(profile)
 
     def _check_allowed(self, event: AstrMessageEvent) -> bool:
         allowed = self.config.get("allowed_users") or []
@@ -287,41 +302,50 @@ class ImageStudioPlugin(Star):
         self.context.register_web_api(
             f"/{PLUGIN_NAME}/test", self.api_test, ["POST"], "测试文生图/图生图"
         )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/profiles", self.api_profiles, ["GET"], "获取配置档案"
+        )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/profiles/save", self.api_profile_save, ["POST"], "保存配置档案"
+        )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/profiles/delete", self.api_profile_delete, ["POST"], "删除配置档案"
+        )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/profiles/activate", self.api_profile_activate, ["POST"], "切换配置档案"
+        )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/profiles/test", self.api_profile_test, ["POST"], "测试配置档案"
+        )
 
     async def api_providers(self):
         return json_response({"providers": PROVIDERS, "ids": PROVIDER_IDS})
 
     async def api_config(self):
-        return json_response({"config": dict(self.config)})
+        return json_response(
+            {"config": {key: self.config.get(key) for key in GLOBAL_KEYS}}
+        )
 
     async def api_save_config(self):
         payload = await request.json(default={})
         if not isinstance(payload, dict):
             return error_response("请求体必须是 JSON 对象", status_code=400)
-
-        for key in SAVEABLE_KEYS:
+        for key in GLOBAL_KEYS:
             if key in payload:
                 self.config[key] = payload[key]
-
-        # 规范化数值与布尔值
-        try:
-            self.config["n"] = max(1, int(self.config.get("n") or 1))
-        except (TypeError, ValueError):
-            self.config["n"] = 1
-        try:
-            self.config["timeout"] = max(10, int(self.config.get("timeout") or 300))
-        except (TypeError, ValueError):
-            self.config["timeout"] = 300
-        self.config["stream"] = bool(self.config.get("stream"))
         self.config["allow_commands"] = bool(self.config.get("allow_commands", True))
         self.config["register_llm_tools"] = bool(
             self.config.get("register_llm_tools", True)
         )
         if not isinstance(self.config.get("allowed_users"), list):
             self.config["allowed_users"] = []
-
         await self.config.save_config_async()
-        return json_response({"ok": True, "config": dict(self.config)})
+        return json_response(
+            {
+                "ok": True,
+                "config": {key: self.config.get(key) for key in GLOBAL_KEYS},
+            }
+        )
 
     async def api_detect_models(self):
         payload = await request.json(default={})
@@ -342,6 +366,15 @@ class ImageStudioPlugin(Star):
 
     async def api_test(self):
         payload = await request.json(default={})
+        return await self._run_test(payload)
+
+    async def api_profile_test(self):
+        payload = await request.json(default={})
+        return await self._run_test(payload)
+
+    async def _run_test(self, payload: dict):
+        if not isinstance(payload, dict):
+            return error_response("请求体必须是 JSON 对象", status_code=400)
         mode = payload.get("mode") or "text"
         prompt = (payload.get("prompt") or "").strip()
         if not prompt:
@@ -357,6 +390,8 @@ class ImageStudioPlugin(Star):
             "n": payload.get("n") or 1,
             "stream": bool(payload.get("stream")),
             "response_format": payload.get("response_format") or "b64_json",
+            "output_format": payload.get("output_format") or "png",
+            "output_compression": payload.get("output_compression"),
             "t2i_path": payload.get("t2i_path") or "/images/generations",
             "i2i_path": payload.get("i2i_path") or "/images/edits",
             "timeout": payload.get("timeout") or 300,
@@ -374,6 +409,57 @@ class ImageStudioPlugin(Star):
             return json_response({"ok": True, "images": images})
         except ImageProviderError as exc:
             return error_response(str(exc), status_code=400)
+
+    async def api_profiles(self):
+        data = self.profile_store.load()
+        return json_response(
+            {"profiles": data["profiles"], "active_id": data["active_id"]}
+        )
+
+    async def api_profile_save(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("请求体必须是 JSON 对象", status_code=400)
+        set_active = bool(payload.pop("set_active", False))
+        if not str(payload.get("base_url") or "").strip():
+            return error_response("请先填写 Base URL", status_code=400)
+        profile, data = self.profile_store.upsert(payload, set_active=set_active)
+        return json_response(
+            {
+                "ok": True,
+                "saved_id": profile["id"],
+                "profiles": data["profiles"],
+                "active_id": data["active_id"],
+            }
+        )
+
+    async def api_profile_delete(self):
+        payload = await request.json(default={})
+        profile_id = str(payload.get("id") or "").strip()
+        if not profile_id:
+            return error_response("缺少配置 id", status_code=400)
+        data = self.profile_store.delete(profile_id)
+        return json_response(
+            {
+                "ok": True,
+                "profiles": data["profiles"],
+                "active_id": data["active_id"],
+            }
+        )
+
+    async def api_profile_activate(self):
+        payload = await request.json(default={})
+        profile_id = str(payload.get("id") or "").strip()
+        if not profile_id:
+            return error_response("缺少配置 id", status_code=400)
+        data = self.profile_store.activate(profile_id)
+        return json_response(
+            {
+                "ok": True,
+                "profiles": data["profiles"],
+                "active_id": data["active_id"],
+            }
+        )
 
     async def _resolve_test_image(self, payload: dict) -> list[str]:
         tmp_dir = self._data_dir() / "tmp"

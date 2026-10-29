@@ -1,11 +1,42 @@
 """图像服务提供商预设。
 
 内置提供商均为 OpenAI 兼容的 Images API（文生图 /images/generations，图生图
-/images/edits），这也是 apikey.fan 聚合站采用的协议。模型列表只是推荐值，
-用户可在可视化视图中点击“检测可用模型”拉取真实模型列表。
+/images/edits）。模型列表只是推荐值，用户可在可视化视图中点击“检测可用模型”
+拉取真实模型列表。
+
+Packy（api.fan）说明：
+- OpenAI 兼容 Base URL 为 https://cf.api.fan/v1（优化线路 https://slb-v1.api.fan/v1）。
+- 只支持 Images API，不支持 Responses API / Chat Completions 出图。
+- n 仅支持 1；不支持 stream / partial_images；不支持 response_format。
+- 使用 output_format（png / jpeg / webp）控制输出格式。
 """
 
 from __future__ import annotations
+
+_COMMON_SIZES = [
+    "auto",
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+    "2048x2048",
+    "2048x1152",
+    "3840x2160",
+    "2160x3840",
+    "768x1024",
+    "1024x768",
+    "512x512",
+]
+
+_PACKY_SIZES = [
+    "auto",
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+    "2048x2048",
+    "2048x1152",
+    "3840x2160",
+    "2160x3840",
+]
 
 PROVIDERS: list[dict] = [
     {
@@ -15,6 +46,12 @@ PROVIDERS: list[dict] = [
         "models": ["gpt-image-1", "dall-e-3", "dall-e-2"],
         "default_model": "gpt-image-1",
         "stream": False,
+        "supports_stream": True,
+        "max_n": 4,
+        "supports_response_format": True,
+        "supports_output_format": False,
+        "default_size": "1024x1024",
+        "sizes": _COMMON_SIZES,
     },
     {
         "id": "apikey",
@@ -23,6 +60,40 @@ PROVIDERS: list[dict] = [
         "models": ["gpt-image-2", "gpt-image-1", "dall-e-3"],
         "default_model": "gpt-image-2",
         "stream": True,
+        "supports_stream": True,
+        "max_n": 4,
+        "supports_response_format": True,
+        "supports_output_format": False,
+        "default_size": "1024x1024",
+        "sizes": _COMMON_SIZES,
+    },
+    {
+        "id": "packy",
+        "name": "Packy / API.FAN（GPT-Image 全球线路）",
+        "base_url": "https://cf.api.fan/v1",
+        "models": ["gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"],
+        "default_model": "gpt-image-2",
+        "stream": False,
+        "supports_stream": False,
+        "max_n": 1,
+        "supports_response_format": False,
+        "supports_output_format": True,
+        "default_size": "auto",
+        "sizes": _PACKY_SIZES,
+    },
+    {
+        "id": "packy_optimized",
+        "name": "Packy / API.FAN（GPT-Image 优化线路）",
+        "base_url": "https://slb-v1.api.fan/v1",
+        "models": ["gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"],
+        "default_model": "gpt-image-2",
+        "stream": False,
+        "supports_stream": False,
+        "max_n": 1,
+        "supports_response_format": False,
+        "supports_output_format": True,
+        "default_size": "auto",
+        "sizes": _PACKY_SIZES,
     },
     {
         "id": "siliconflow",
@@ -36,6 +107,12 @@ PROVIDERS: list[dict] = [
         ],
         "default_model": "black-forest-labs/FLUX.1-schnell",
         "stream": False,
+        "supports_stream": False,
+        "max_n": 4,
+        "supports_response_format": True,
+        "supports_output_format": False,
+        "default_size": "1024x1024",
+        "sizes": ["1024x1024", "768x1024", "1024x768", "512x512"],
     },
     {
         "id": "zhipu",
@@ -44,6 +121,12 @@ PROVIDERS: list[dict] = [
         "models": ["cogview-3-flash", "cogview-3-plus", "cogview-4"],
         "default_model": "cogview-3-flash",
         "stream": False,
+        "supports_stream": False,
+        "max_n": 1,
+        "supports_response_format": True,
+        "supports_output_format": False,
+        "default_size": "1024x1024",
+        "sizes": ["1024x1024", "768x1024", "1024x768"],
     },
     {
         "id": "volcengine",
@@ -52,6 +135,12 @@ PROVIDERS: list[dict] = [
         "models": ["doubao-seedream-3-0-t2i-250415"],
         "default_model": "doubao-seedream-3-0-t2i-250415",
         "stream": False,
+        "supports_stream": False,
+        "max_n": 4,
+        "supports_response_format": True,
+        "supports_output_format": False,
+        "default_size": "1024x1024",
+        "sizes": ["1024x1024", "2048x2048", "1024x1536", "1536x1024"],
     },
     {
         "id": "custom",
@@ -60,6 +149,12 @@ PROVIDERS: list[dict] = [
         "models": [],
         "default_model": "",
         "stream": False,
+        "supports_stream": True,
+        "max_n": 4,
+        "supports_response_format": True,
+        "supports_output_format": False,
+        "default_size": "1024x1024",
+        "sizes": _COMMON_SIZES,
     },
 ]
 

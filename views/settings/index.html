@@ -39,7 +39,7 @@
         line-height: 1.55;
         font-size: 14px;
       }
-      .wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 48px; }
+      .wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px 48px; }
       h1 { font-size: 20px; margin: 0 0 4px; }
       .subtitle { color: var(--muted); margin: 0 0 20px; }
       .card {
@@ -78,6 +78,7 @@
         cursor: pointer;
         background: var(--accent);
         color: #fff;
+        white-space: nowrap;
       }
       button:hover { background: var(--accent-hover); }
       button.secondary {
@@ -86,17 +87,23 @@
         border: 1px solid var(--border);
       }
       button.secondary:hover { background: var(--border); }
+      button.danger {
+        background: transparent;
+        color: var(--danger);
+        border: 1px solid var(--danger);
+      }
+      button.danger:hover { background: rgba(220,38,38,.12); }
       button.primary { font-weight: 600; }
       .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .profile-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .profile-bar select { flex: 1; min-width: 220px; }
+      .active-hint { margin-top: 10px; font-size: 12px; color: var(--accent); }
       .hint { font-size: 12px; color: var(--muted); }
       .status { padding: 10px 12px; border-radius: 8px; margin: 12px 0; display: none; }
       .status.ok { display: block; background: rgba(22,163,74,.12); color: var(--ok); }
       .status.err { display: block; background: rgba(220,38,38,.12); color: var(--danger); }
       .status.info { display: block; background: rgba(79,70,229,.12); color: var(--accent); }
-      .preview {
-        margin-top: 14px;
-        display: none;
-      }
+      .preview { margin-top: 14px; display: none; }
       .preview.show { display: block; }
       .preview img {
         max-width: 100%;
@@ -112,7 +119,7 @@
         user-select: none;
       }
       .toggle input { width: auto; }
-      .actions { display: flex; gap: 10px; margin-top: 18px; }
+      .actions { display: flex; gap: 10px; margin-top: 18px; align-items: center; flex-wrap: wrap; }
       .model-row { display: flex; gap: 8px; }
       .model-row input { flex: 1; }
       @media (max-width: 640px) {
@@ -123,10 +130,32 @@
   <body>
     <div class="wrap">
       <h1>图像工坊设置</h1>
-      <p class="subtitle">配置文生图 / 图生图服务。可先测试，测试通过后再保存配置。</p>
+      <p class="subtitle">可添加多个服务商配置，测试通过后保存，并随时切换机器人当前使用的配置。</p>
 
       <section class="card">
-        <h2>1 · 服务与密钥</h2>
+        <h2>配置档案</h2>
+        <div class="profile-bar">
+          <select id="profileSelect"></select>
+          <button id="newProfile" class="secondary" type="button">新建配置</button>
+          <button id="activateProfile" class="secondary" type="button">设为当前</button>
+          <button id="deleteProfile" class="danger" type="button">删除</button>
+        </div>
+        <div id="activeHint" class="active-hint"></div>
+        <div class="grid" style="margin-top: 14px;">
+          <div class="field">
+            <label for="profileName">配置名称</label>
+            <input id="profileName" placeholder="例如：OpenAI 主号 / Packy 绘图" />
+          </div>
+          <div class="field" style="justify-content: flex-end;">
+            <label class="toggle">
+              <input id="set_active" type="checkbox" checked /> 保存后设为当前配置
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>服务与密钥</h2>
         <div class="grid">
           <div class="field">
             <label for="provider">服务提供商</label>
@@ -143,7 +172,7 @@
               <button id="toggle_key" class="secondary" type="button">显示</button>
             </div>
           </div>
-          <div class="field">
+          <div class="field full">
             <label for="model">模型</label>
             <div class="model-row">
               <input id="model" list="modelOptions" placeholder="留空使用默认模型" />
@@ -155,19 +184,22 @@
       </section>
 
       <section class="card">
-        <h2>2 · 生成参数</h2>
+        <h2>生成参数</h2>
         <div class="grid">
           <div class="field">
             <label for="size">图片尺寸</label>
             <select id="size">
+              <option value="auto">auto</option>
               <option value="1024x1024">1024x1024</option>
-              <option value="1024x1536">1024x1536</option>
               <option value="1536x1024">1536x1024</option>
+              <option value="1024x1536">1024x1536</option>
+              <option value="2048x2048">2048x2048</option>
+              <option value="2048x1152">2048x1152</option>
+              <option value="3840x2160">3840x2160</option>
+              <option value="2160x3840">2160x3840</option>
               <option value="768x1024">768x1024</option>
               <option value="1024x768">1024x768</option>
               <option value="512x512">512x512</option>
-              <option value="2048x2048">2048x2048</option>
-              <option value="auto">auto</option>
             </select>
           </div>
           <div class="field">
@@ -190,11 +222,11 @@
               <option value="url">url</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field full">
             <label class="toggle">
               <input id="stream" type="checkbox" /> 启用 SSE 流式返回
             </label>
-            <span class="hint">apikey.fan 的 gpt-image-2 建议开启。</span>
+            <span class="hint">apikey.fan 的 gpt-image-2 建议开启；Packy 不支持流式。</span>
           </div>
         </div>
 
@@ -210,6 +242,19 @@
               <input id="i2i_path" value="/images/edits" />
             </div>
             <div class="field">
+              <label for="output_format">输出格式（Packy / GPT-Image）</label>
+              <select id="output_format">
+                <option value="png">png</option>
+                <option value="jpeg">jpeg</option>
+                <option value="webp">webp</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="output_compression">JPEG 压缩质量（0-100）</label>
+              <input id="output_compression" type="number" min="0" max="100" step="1" value="90" />
+              <span class="hint">仅 output_format=jpeg 时生效。</span>
+            </div>
+            <div class="field full">
               <label for="timeout">超时（秒）</label>
               <input id="timeout" type="number" min="10" max="900" step="10" value="300" />
             </div>
@@ -218,7 +263,7 @@
       </section>
 
       <section class="card">
-        <h2>3 · 测试</h2>
+        <h2>测试当前表单</h2>
         <div class="row">
           <label class="toggle"><input type="radio" name="mode" value="text" checked /> 文生图</label>
           <label class="toggle"><input type="radio" name="mode" value="image" /> 图生图</label>
@@ -233,14 +278,14 @@
         </div>
         <div class="row" style="margin-top: 12px;">
           <button id="run_test" class="primary" type="button">开始测试</button>
-          <span class="hint">测试会直接使用上方填写的地址、密钥与参数。</span>
+          <span class="hint">测试使用当前表单，不会自动保存。</span>
         </div>
         <div id="status" class="status"></div>
         <div id="preview" class="preview"></div>
       </section>
 
       <section class="card">
-        <h2>4 · 行为选项</h2>
+        <h2>插件行为</h2>
         <div class="grid">
           <div class="field">
             <label class="toggle"><input id="allow_commands" type="checkbox" checked /> 启用 /文生图、/图生图 指令</label>
@@ -258,13 +303,16 @@
 
     <script type="module">
       const bridge = window.AstrBotPluginView;
-      const ctx = await bridge.ready();
+      await bridge.ready();
 
       const $ = (id) => document.getElementById(id);
       const status = $("status");
       const preview = $("preview");
 
       let providers = [];
+      let profiles = [];
+      let activeId = "";
+      let editingId = "";
 
       function setStatus(msg, type) {
         status.className = "status " + type;
@@ -273,6 +321,10 @@
       function clearStatus() {
         status.className = "status";
         status.textContent = "";
+      }
+
+      function currentProvider() {
+        return providers.find((x) => x.id === $("provider").value) || {};
       }
 
       function fillModelOptions(models) {
@@ -285,17 +337,103 @@
         }
       }
 
+      function syncCapabilityUi() {
+        const p = currentProvider();
+        const maxN = p.max_n || 4;
+        $("n").max = String(maxN);
+        if ((parseInt($("n").value, 10) || 1) > maxN) {
+          $("n").value = String(maxN);
+        }
+        const supportsStream = p.supports_stream !== false;
+        $("stream").disabled = !supportsStream;
+        if (!supportsStream) $("stream").checked = false;
+        const supportsOutput = !!p.supports_output_format;
+        $("output_format").disabled = !supportsOutput;
+        $("output_compression").disabled =
+          !supportsOutput || $("output_format").value !== "jpeg";
+      }
+
       function onProviderChange() {
-        const p = providers.find((x) => x.id === $("provider").value);
-        if (!p) return;
+        const p = currentProvider();
+        if (!p.id) return;
         $("base_url").value = p.base_url || "";
         $("model").value = p.default_model || "";
         $("stream").checked = !!p.stream;
+        if (p.default_size) $("size").value = p.default_size;
         fillModelOptions(p.models || []);
+        syncCapabilityUi();
       }
 
-      function collectConfig() {
+      function renderProfileSelect() {
+        const sel = $("profileSelect");
+        sel.innerHTML = "";
+        if (!editingId) {
+          const opt = document.createElement("option");
+          opt.value = "__new__";
+          opt.textContent = "新配置（未保存）";
+          sel.appendChild(opt);
+        }
+        for (const p of profiles) {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = (p.name || p.id) + (p.id === activeId ? " · 当前" : "");
+          sel.appendChild(opt);
+        }
+        sel.value = editingId || "__new__";
+        const active = profiles.find((p) => p.id === activeId);
+        $("activeHint").textContent = active
+          ? "机器人当前使用：" + (active.name || active.id)
+          : "机器人当前使用：未设置";
+      }
+
+      function defaultProfile() {
+        const p = providers.find((x) => x.id === "openai") || {};
         return {
+          id: "",
+          name: "",
+          provider: "openai",
+          base_url: p.base_url || "https://api.openai.com/v1",
+          api_key: "",
+          model: p.default_model || "gpt-image-1",
+          size: p.default_size || "1024x1024",
+          quality: "auto",
+          n: 1,
+          stream: !!p.stream,
+          response_format: "b64_json",
+          output_format: "png",
+          output_compression: 90,
+          t2i_path: "/images/generations",
+          i2i_path: "/images/edits",
+          timeout: 300,
+        };
+      }
+
+      function loadIntoForm(p) {
+        const profile = p || defaultProfile();
+        $("profileName").value = profile.name || "";
+        $("provider").value = profile.provider || "openai";
+        $("base_url").value = profile.base_url || "";
+        $("api_key").value = profile.api_key || "";
+        $("model").value = profile.model || "";
+        $("size").value = profile.size || "1024x1024";
+        $("quality").value = profile.quality || "auto";
+        $("n").value = profile.n || 1;
+        $("stream").checked = !!profile.stream;
+        $("response_format").value = profile.response_format || "b64_json";
+        $("output_format").value = profile.output_format || "png";
+        $("output_compression").value =
+          profile.output_compression === undefined ? 90 : profile.output_compression;
+        $("t2i_path").value = profile.t2i_path || "/images/generations";
+        $("i2i_path").value = profile.i2i_path || "/images/edits";
+        $("timeout").value = profile.timeout || 300;
+        fillModelOptions(currentProvider().models || []);
+        syncCapabilityUi();
+      }
+
+      function collectProfile() {
+        return {
+          id: editingId || undefined,
+          name: $("profileName").value.trim() || "未命名配置",
           provider: $("provider").value,
           base_url: $("base_url").value.trim(),
           api_key: $("api_key").value.trim(),
@@ -305,38 +443,49 @@
           n: parseInt($("n").value, 10) || 1,
           stream: $("stream").checked,
           response_format: $("response_format").value,
+          output_format: $("output_format").value,
+          output_compression: parseInt($("output_compression").value, 10) || 0,
           t2i_path: $("t2i_path").value.trim() || "/images/generations",
           i2i_path: $("i2i_path").value.trim() || "/images/edits",
           timeout: parseInt($("timeout").value, 10) || 300,
-          allow_commands: $("allow_commands").checked,
-          register_llm_tools: $("register_llm_tools").checked,
-          allowed_users: [],
         };
       }
 
-      function applyConfig(cfg) {
-        if (!cfg) return;
-        $("provider").value = cfg.provider || "openai";
-        $("base_url").value = cfg.base_url || "";
-        $("api_key").value = cfg.api_key || "";
-        $("model").value = cfg.model || "";
-        $("size").value = cfg.size || "1024x1024";
-        $("quality").value = cfg.quality || "auto";
-        $("n").value = cfg.n || 1;
-        $("stream").checked = !!cfg.stream;
-        $("response_format").value = cfg.response_format || "b64_json";
-        $("t2i_path").value = cfg.t2i_path || "/images/generations";
-        $("i2i_path").value = cfg.i2i_path || "/images/edits";
-        $("timeout").value = cfg.timeout || 300;
-        $("allow_commands").checked = cfg.allow_commands !== false;
-        $("register_llm_tools").checked = cfg.register_llm_tools !== false;
+      function applyProfilesResult(res, preferredId) {
+        profiles = res.profiles || profiles;
+        activeId = res.active_id || activeId;
+        editingId = preferredId || activeId;
+        renderProfileSelect();
+        const p = profiles.find((x) => x.id === editingId);
+        if (p) loadIntoForm(p);
       }
 
-      // 模式切换
       document.querySelectorAll('input[name="mode"]').forEach((r) => {
         r.addEventListener("change", () => {
           $("imageField").style.display = r.value === "image" ? "flex" : "none";
         });
+      });
+
+      $("profileSelect").addEventListener("change", () => {
+        const value = $("profileSelect").value;
+        if (value === "__new__") {
+          editingId = "";
+          loadIntoForm(defaultProfile());
+          renderProfileSelect();
+          return;
+        }
+        const p = profiles.find((x) => x.id === value);
+        if (p) {
+          editingId = p.id;
+          loadIntoForm(p);
+          renderProfileSelect();
+        }
+      });
+
+      $("newProfile").addEventListener("click", () => {
+        editingId = "";
+        loadIntoForm(defaultProfile());
+        renderProfileSelect();
       });
 
       $("provider").addEventListener("change", onProviderChange);
@@ -345,6 +494,10 @@
         const show = inp.type === "password";
         inp.type = show ? "text" : "password";
         $("toggle_key").textContent = show ? "隐藏" : "显示";
+      });
+      $("output_format").addEventListener("change", () => {
+        $("output_compression").disabled =
+          $("output_format").disabled || $("output_format").value !== "jpeg";
       });
 
       $("detect").addEventListener("click", async () => {
@@ -381,7 +534,7 @@
           setStatus("请先填写测试 Prompt", "err");
           return;
         }
-        const body = collectConfig();
+        const body = collectProfile();
         body.mode = mode;
         body.prompt = prompt;
         if (mode === "image") {
@@ -394,7 +547,7 @@
         }
         setStatus("正在生成，请稍候…", "info");
         try {
-          const res = await bridge.apiPost("test", body);
+          const res = await bridge.apiPost("profiles/test", body);
           const images = res.images || [];
           if (!images.length) {
             setStatus("接口未返回图片", "err");
@@ -422,13 +575,62 @@
       $("save").addEventListener("click", async () => {
         clearStatus();
         $("saveHint").textContent = "";
+        const body = collectProfile();
+        body.set_active = $("set_active").checked;
         try {
-          const res = await bridge.apiPost("config/save", collectConfig());
-          applyConfig(res.config);
+          const res = await bridge.apiPost("profiles/save", body);
+          await bridge.apiPost("config/save", {
+            allow_commands: $("allow_commands").checked,
+            register_llm_tools: $("register_llm_tools").checked,
+          });
+          applyProfilesResult(res, res.saved_id);
           $("saveHint").textContent = "已保存";
-          setStatus("配置已保存。", "ok");
+          setStatus(
+            res.active_id === res.saved_id
+              ? "配置已保存，并设为当前使用。"
+              : "配置已保存。",
+            "ok"
+          );
         } catch (e) {
           setStatus("保存失败：" + (e.message || e), "err");
+        }
+      });
+
+      $("activateProfile").addEventListener("click", async () => {
+        clearStatus();
+        if (!editingId) {
+          setStatus("新配置尚未保存，请先保存再设为当前。", "err");
+          return;
+        }
+        try {
+          const res = await bridge.apiPost("profiles/activate", { id: editingId });
+          profiles = res.profiles || profiles;
+          activeId = res.active_id;
+          renderProfileSelect();
+          setStatus("已切换机器人当前使用的配置。", "ok");
+        } catch (e) {
+          setStatus("切换失败：" + (e.message || e), "err");
+        }
+      });
+
+      $("deleteProfile").addEventListener("click", async () => {
+        clearStatus();
+        if (!editingId) {
+          setStatus("新配置尚未保存，无需删除。", "err");
+          return;
+        }
+        if (!confirm("确定删除当前配置档案？")) return;
+        try {
+          const res = await bridge.apiPost("profiles/delete", { id: editingId });
+          profiles = res.profiles || [];
+          activeId = res.active_id || "";
+          editingId = activeId;
+          renderProfileSelect();
+          const p = profiles.find((x) => x.id === editingId);
+          if (p) loadIntoForm(p);
+          setStatus("配置已删除。", "ok");
+        } catch (e) {
+          setStatus("删除失败：" + (e.message || e), "err");
         }
       });
 
@@ -441,10 +643,10 @@
         });
       }
 
-      // 初始化
       try {
-        const [pRes, cRes] = await Promise.all([
+        const [pRes, profilesRes, configRes] = await Promise.all([
           bridge.apiGet("providers"),
+          bridge.apiGet("profiles"),
           bridge.apiGet("config"),
         ]);
         providers = pRes.providers || [];
@@ -455,11 +657,15 @@
           opt.textContent = p.name;
           select.appendChild(opt);
         }
-        applyConfig(cRes.config);
-        // 保证 provider 下拉与预设同步（若配置来自旧版本）
-        onProviderChange();
-        // 用配置值覆盖预设自动填充，避免覆盖用户已保存的自定义值
-        applyConfig(cRes.config);
+        profiles = profilesRes.profiles || [];
+        activeId = profilesRes.active_id || "";
+        editingId = activeId;
+        renderProfileSelect();
+        const current = profiles.find((x) => x.id === editingId) || defaultProfile();
+        loadIntoForm(current);
+        const cfg = configRes.config || {};
+        $("allow_commands").checked = cfg.allow_commands !== false;
+        $("register_llm_tools").checked = cfg.register_llm_tools !== false;
       } catch (e) {
         setStatus("加载配置失败：" + (e.message || e), "err");
       }

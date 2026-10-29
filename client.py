@@ -98,6 +98,15 @@ class ImageClient:
         self.i2i_path = str(config.get("i2i_path") or "/images/edits").strip()
         self.timeout = float(config.get("timeout") or DEFAULT_TIMEOUT)
         self.extra_body = config.get("extra_body") or {}
+        # 能力开关：不同提供商对 response_format / output_format 的支持不同。
+        self.supports_response_format = bool(
+            config.get("supports_response_format", True)
+        )
+        self.supports_output_format = bool(
+            config.get("supports_output_format", False)
+        )
+        self.output_format = str(config.get("output_format") or "png").strip().lower()
+        self.output_compression = config.get("output_compression")
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -159,7 +168,15 @@ class ImageClient:
         }
         if self.quality:
             body["quality"] = self.quality
-        body["response_format"] = self.response_format
+        if self.supports_response_format:
+            body["response_format"] = self.response_format
+        if self.supports_output_format:
+            body["output_format"] = self.output_format
+            if self.output_format == "jpeg" and self.output_compression is not None:
+                try:
+                    body["output_compression"] = int(self.output_compression)
+                except (TypeError, ValueError):
+                    pass
         if self.stream:
             body["stream"] = True
         body.update(self.extra_body)
@@ -201,7 +218,15 @@ class ImageClient:
         }
         if self.quality:
             fields["quality"] = self.quality
-        fields["response_format"] = self.response_format
+        if self.supports_response_format:
+            fields["response_format"] = self.response_format
+        if self.supports_output_format:
+            fields["output_format"] = self.output_format
+            if self.output_format == "jpeg" and self.output_compression is not None:
+                try:
+                    fields["output_compression"] = str(int(self.output_compression))
+                except (TypeError, ValueError):
+                    pass
         if self.stream:
             fields["stream"] = "true"
         for key, value in self.extra_body.items():

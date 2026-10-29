@@ -3,77 +3,135 @@
     "description": "文生图/图生图服务提供商",
     "type": "string",
     "default": "openai",
-    "options": ["openai", "apikey", "siliconflow", "zhipu", "volcengine", "custom"],
-    "labels": ["OpenAI（国际）", "apikey.fan 聚合", "硅基流动 SiliconFlow", "智谱 AI BigModel", "火山方舟（豆包）", "自定义 / OpenAI 兼容"],
-    "hint": "选择提供商后会自动填充模型 URL 与推荐模型；自定义可填写任意 OpenAI 兼容接口。"
+    "options": [
+      "openai",
+      "apikey",
+      "packy",
+      "packy_optimized",
+      "siliconflow",
+      "zhipu",
+      "volcengine",
+      "custom"
+    ],
+    "labels": [
+      "OpenAI（国际）",
+      "apikey.fan 聚合",
+      "Packy / API.FAN（GPT-Image 全球线路）",
+      "Packy / API.FAN（GPT-Image 优化线路）",
+      "硅基流动 SiliconFlow",
+      "智谱 AI BigModel",
+      "火山方舟（豆包）",
+      "自定义 / OpenAI 兼容"
+    ],
+    "hint": "选择提供商后会自动填充模型 URL 与推荐模型；自定义可填写任意 OpenAI 兼容接口。",
+    "invisible": true
   },
   "base_url": {
     "description": "模型服务 API 地址（Base URL）",
     "type": "string",
     "default": "https://api.openai.com/v1",
-    "hint": "通常以 /v1 结尾。选择内置提供商会自动填入，也可手动修改。"
+    "hint": "通常以 /v1 结尾。选择内置提供商会自动填入，也可手动修改。",
+    "invisible": true
   },
   "api_key": {
     "description": "API Key",
     "type": "string",
     "default": "",
     "secret": true,
-    "hint": "仅保存在本机插件配置中，请勿泄露。"
+    "hint": "仅保存在本机插件配置中，请勿泄露。",
+    "invisible": true
   },
   "model": {
     "description": "默认模型",
     "type": "string",
     "default": "gpt-image-1",
-    "hint": "可留空使用提供商默认模型，或在可视化视图中点击“检测可用模型”后选择。"
+    "hint": "可留空使用提供商默认模型，或在可视化视图中点击“检测可用模型”后选择。",
+    "invisible": true
   },
   "size": {
     "description": "图片尺寸",
     "type": "string",
     "default": "1024x1024",
-    "options": ["1024x1024", "1024x1536", "1536x1024", "768x1024", "1024x768", "512x512", "2048x2048", "auto"],
-    "hint": "部分模型只支持特定尺寸。"
+    "options": [
+      "auto",
+      "1024x1024",
+      "1536x1024",
+      "1024x1536",
+      "2048x2048",
+      "2048x1152",
+      "3840x2160",
+      "2160x3840",
+      "768x1024",
+      "1024x768",
+      "512x512"
+    ],
+    "hint": "部分模型只支持特定尺寸。",
+    "invisible": true
   },
   "quality": {
     "description": "图片质量",
     "type": "string",
     "default": "auto",
-    "options": ["auto", "high", "medium", "low"],
-    "hint": "部分模型不支持该参数，可忽略。"
+    "options": [
+      "auto",
+      "high",
+      "medium",
+      "low"
+    ],
+    "hint": "部分模型不支持该参数，可忽略。",
+    "invisible": true
   },
   "n": {
     "description": "生成数量",
     "type": "int",
     "default": 1,
-    "slider": {"min": 1, "max": 4, "step": 1}
+    "slider": {
+      "min": 1,
+      "max": 4,
+      "step": 1
+    },
+    "invisible": true
   },
   "stream": {
     "description": "启用 SSE 流式返回",
     "type": "bool",
     "default": false,
-    "hint": "apikey.fan 的 gpt-image-2 等模型需要开启流式；其它提供商通常关闭即可。"
+    "hint": "apikey.fan 的 gpt-image-2 等模型需要开启流式；其它提供商通常关闭即可。",
+    "invisible": true
   },
   "response_format": {
     "description": "返回格式",
     "type": "string",
     "default": "b64_json",
-    "options": ["b64_json", "url"],
-    "hint": "b64_json 最通用，便于直接保存和发送图片。"
+    "options": [
+      "b64_json",
+      "url"
+    ],
+    "hint": "b64_json 最通用，便于直接保存和发送图片。",
+    "invisible": true
   },
   "t2i_path": {
     "description": "文生图接口路径",
     "type": "string",
-    "default": "/images/generations"
+    "default": "/images/generations",
+    "invisible": true
   },
   "i2i_path": {
     "description": "图生图接口路径",
     "type": "string",
-    "default": "/images/edits"
+    "default": "/images/edits",
+    "invisible": true
   },
   "timeout": {
     "description": "请求超时（秒）",
     "type": "int",
     "default": 300,
-    "slider": {"min": 10, "max": 900, "step": 10}
+    "slider": {
+      "min": 10,
+      "max": 900,
+      "step": 10
+    },
+    "invisible": true
   },
   "allow_commands": {
     "description": "启用聊天指令（/文生图、/图生图）",
@@ -91,5 +149,29 @@
     "type": "list",
     "default": [],
     "_special": "sender_id"
+  },
+  "output_format": {
+    "description": "输出格式（Packy / GPT-Image）",
+    "type": "string",
+    "default": "png",
+    "options": [
+      "png",
+      "jpeg",
+      "webp"
+    ],
+    "hint": "仅对 Packy 等支持 output_format 的服务生效，优先使用 png。",
+    "invisible": true
+  },
+  "output_compression": {
+    "description": "JPEG 压缩质量（0-100）",
+    "type": "int",
+    "default": 90,
+    "slider": {
+      "min": 0,
+      "max": 100,
+      "step": 1
+    },
+    "hint": "仅在 output_format=jpeg 时生效。",
+    "invisible": true
   }
 }
