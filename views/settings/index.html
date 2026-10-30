@@ -112,7 +112,7 @@
       .status.info { display: block; background: rgba(79,70,229,.12); color: var(--accent); }
       .preview { margin-top: 14px; display: none; }
       .preview.show { display: block; }
-      .preview img {
+      .preview img, .preview video {
         max-width: 100%;
         max-height: 420px;
         border-radius: 10px;
@@ -329,13 +329,107 @@
       </section>
 
       <section class="card">
+        <h2>动画说明（本地 SVG 动画）</h2>
+        <p class="hint" style="margin-top:-4px;">
+          让 AI 用动画解释一个概念：机器人生成 JSON 动画脚本，工具本地逐帧绘制并编码为 GIF/WebP/MP4，不调用视频模型。
+          聊天中可用 <code>/动画</code> 或让 AI 调用 <code>create_animation</code>。
+        </p>
+        <div class="grid" style="margin-top:12px;">
+          <div class="field">
+            <label for="motionPattern">动画模式</label>
+            <select id="motionPattern">
+              <option value="flow">流程 / 因果</option>
+              <option value="timeline">时间线</option>
+              <option value="cycle">循环</option>
+              <option value="comparison">对比</option>
+              <option value="text">文字动效</option>
+              <option value="chart">图表</option>
+              <option value="slideshow">图片轮播</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="motionFormat">预览输出格式</label>
+            <select id="motionFormat">
+              <option value="gif">gif</option>
+              <option value="mp4">mp4</option>
+              <option value="webp">webp</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="motion_width">宽度</label>
+            <input id="motion_width" type="number" min="240" max="1280" step="2" value="640" />
+          </div>
+          <div class="field">
+            <label for="motion_height">高度</label>
+            <input id="motion_height" type="number" min="240" max="1280" step="2" value="360" />
+          </div>
+          <div class="field">
+            <label for="motion_fps">帧率</label>
+            <input id="motion_fps" type="number" min="5" max="24" step="1" value="12" />
+          </div>
+          <div class="field">
+            <label for="motionDuration">预览时长（秒）</label>
+            <input id="motionDuration" type="number" min="1" max="15" step="0.5" value="4" />
+          </div>
+          <div class="field full">
+            <label for="motionSource">动画 JSON 脚本</label>
+            <textarea id="motionSource" spellcheck="false"
+              style="min-height:190px; font-family: ui-monospace, Consolas, monospace; font-size:12px;"></textarea>
+          </div>
+          <div class="field full">
+            <label for="motionImages">图片轮播素材（可多选，仅 slideshow 使用）</label>
+            <input id="motionImages" type="file" accept="image/*" multiple />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button id="fillMotionSample" class="secondary" type="button">填入示例</button>
+          <button id="renderMotion" class="primary" type="button">生成预览</button>
+          <span class="hint" id="motionHint"></span>
+        </div>
+        <div id="motionPreview" class="preview"></div>
+      </section>
+
+      <section class="card">
         <h2>插件行为</h2>
         <div class="grid">
           <div class="field">
             <label class="toggle"><input id="allow_commands" type="checkbox" checked /> 启用 /文生图、/图生图 指令</label>
           </div>
           <div class="field">
-            <label class="toggle"><input id="register_llm_tools" type="checkbox" checked /> 向 AI 注册文生图/图生图工具</label>
+            <label class="toggle"><input id="register_llm_tools" type="checkbox" checked /> 向 AI 注册文生图/图生图/动画工具</label>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:14px;">
+          <div class="field">
+            <label for="motion_default_format">动画默认格式</label>
+            <select id="motion_default_format">
+              <option value="gif">gif</option>
+              <option value="webp">webp</option>
+              <option value="mp4">mp4</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="motion_max_duration">动画最大时长（秒）</label>
+            <input id="motion_max_duration" type="number" min="2" max="60" step="1" value="15" />
+          </div>
+          <div class="field">
+            <label for="motion_max_frames">动画最大帧数</label>
+            <input id="motion_max_frames" type="number" min="10" max="600" step="10" value="360" />
+          </div>
+          <div class="field">
+            <label for="motion_max_dimension">动画最大边长</label>
+            <input id="motion_max_dimension" type="number" min="240" max="4096" step="64" value="1280" />
+          </div>
+          <div class="field">
+            <label for="motion_max_file_mb">动画最大文件（MB）</label>
+            <input id="motion_max_file_mb" type="number" min="1" max="100" step="1" value="20" />
+          </div>
+          <div class="field">
+            <label for="motion_max_concurrency">最大并发渲染数</label>
+            <input id="motion_max_concurrency" type="number" min="1" max="4" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label class="toggle"><input id="motion_video_as_file" type="checkbox" /> MP4 以文件形式发送</label>
           </div>
         </div>
         <div class="actions">
@@ -630,6 +724,16 @@
             svg_height: parseInt($("svg_height").value, 10) || 0,
             svg_background: $("svg_background").value.trim() || "#ffffff",
             svg_max_dimension: parseInt($("svg_max_dimension").value, 10) || 4096,
+            motion_default_format: $("motion_default_format").value,
+            motion_width: parseInt($("motion_width").value, 10) || 640,
+            motion_height: parseInt($("motion_height").value, 10) || 360,
+            motion_fps: parseInt($("motion_fps").value, 10) || 12,
+            motion_max_duration: parseInt($("motion_max_duration").value, 10) || 15,
+            motion_max_frames: parseInt($("motion_max_frames").value, 10) || 360,
+            motion_max_dimension: parseInt($("motion_max_dimension").value, 10) || 1280,
+            motion_max_file_mb: parseInt($("motion_max_file_mb").value, 10) || 20,
+            motion_max_concurrency: parseInt($("motion_max_concurrency").value, 10) || 1,
+            motion_video_as_file: $("motion_video_as_file").checked,
           });
           applyProfilesResult(res, res.saved_id);
           $("saveHint").textContent = "已保存";
@@ -735,6 +839,128 @@
       $("fill_sample").addEventListener("click", fillSvgSample);
       $("render_svg").addEventListener("click", renderSvgPreview);
 
+      const MOTION_SAMPLES = {
+        flow: {
+          pattern: "flow",
+          title: "TCP 三次握手",
+          format: "gif",
+          actors: [
+            { id: "client", label: "客户端" },
+            { id: "server", label: "服务器" },
+          ],
+          steps: [
+            { from: "client", to: "server", label: "SYN", description: "请求建立连接" },
+            { from: "server", to: "client", label: "SYN + ACK", description: "确认并回应" },
+            { from: "client", to: "server", label: "ACK", description: "确认建立" },
+          ],
+        },
+        timeline: {
+          pattern: "timeline",
+          title: "项目里程碑",
+          events: [
+            { time: "Q1", label: "立项", description: "确定方向" },
+            { time: "Q2", label: "原型", description: "验证体验" },
+            { time: "Q3", label: "上线", description: "发布首个版本" },
+          ],
+        },
+        cycle: {
+          pattern: "cycle",
+          title: "水的循环",
+          center: "水循环",
+          nodes: ["蒸发", "凝结", "降水", "汇集"],
+        },
+        comparison: {
+          pattern: "comparison",
+          title: "两种方案对比",
+          left: { title: "HTTP", items: ["明文传输", "部署简单", "性能开销小"] },
+          right: { title: "HTTPS", items: ["加密传输", "身份校验", "更安全"] },
+        },
+        text: {
+          pattern: "text",
+          title: "什么是 SVG",
+          style: "slide",
+          lines: ["矢量图形", "无限缩放", "结构清晰"],
+        },
+        chart: {
+          pattern: "chart",
+          title: "季度增长",
+          chart_type: "bar",
+          unit: "%",
+          labels: ["Q1", "Q2", "Q3", "Q4"],
+          series: [{ name: "增长率", values: [12, 28, 45, 68] }],
+        },
+        slideshow: {
+          pattern: "slideshow",
+          title: "图片轮播",
+          subtitle: "请先选择图片素材",
+          transition: "fade",
+          images: [],
+        },
+      };
+
+      function fillMotionSample() {
+        const pattern = $("motionPattern").value;
+        const sample = MOTION_SAMPLES[pattern] || MOTION_SAMPLES.flow;
+        $("motionSource").value = JSON.stringify(sample, null, 2);
+        $("motionHint").textContent =
+          pattern === "slideshow" ? "请选择至少一张图片后再生成预览" : "";
+      }
+
+      $("motionPattern").addEventListener("change", fillMotionSample);
+      $("fillMotionSample").addEventListener("click", fillMotionSample);
+
+      $("renderMotion").addEventListener("click", async () => {
+        $("motionHint").textContent = "";
+        $("motionPreview").className = "preview";
+        $("motionPreview").innerHTML = "";
+        let spec;
+        try {
+          spec = JSON.parse($("motionSource").value);
+        } catch (e) {
+          $("motionHint").textContent = "JSON 解析失败：" + e.message;
+          return;
+        }
+        spec.width = parseInt($("motion_width").value, 10) || 640;
+        spec.height = parseInt($("motion_height").value, 10) || 360;
+        spec.fps = parseInt($("motion_fps").value, 10) || 12;
+        spec.format = $("motionFormat").value;
+        const duration = parseFloat($("motionDuration").value);
+        if (duration > 0) spec.duration = duration;
+        const files = Array.from($("motionImages").files || []);
+        if (files.some((file) => file.size > 8 * 1024 * 1024)) {
+          $("motionHint").textContent = "单张图片不能超过 8 MB";
+          return;
+        }
+        if (files.length) {
+          spec.images = await Promise.all(files.map(fileToBase64));
+        }
+        $("motionHint").textContent = "正在生成动画…";
+        try {
+          const res = await bridge.apiPost("animation/render", spec);
+          const src = "data:" + res.mime + ";base64," + res.b64;
+          let el;
+          if (res.mime === "video/mp4") {
+            el = document.createElement("video");
+            el.controls = true;
+            el.autoplay = true;
+            el.loop = true;
+            el.muted = true;
+            el.playsInline = true;
+          } else {
+            el = document.createElement("img");
+          }
+          el.src = src;
+          $("motionPreview").className = "preview show";
+          $("motionPreview").appendChild(el);
+          $("motionHint").textContent =
+            "生成成功：" + res.width + "×" + res.height + "，" +
+            res.duration.toFixed(1) + " 秒，" +
+            (res.size_bytes / 1024 / 1024).toFixed(2) + " MB";
+        } catch (e) {
+          $("motionHint").textContent = "生成失败：" + (e.message || e);
+        }
+      });
+
       try {
         const [pRes, profilesRes, configRes] = await Promise.all([
           bridge.apiGet("providers"),
@@ -762,7 +988,19 @@
         $("svg_height").value = cfg.svg_height || 0;
         $("svg_background").value = cfg.svg_background || "#ffffff";
         $("svg_max_dimension").value = cfg.svg_max_dimension || 4096;
+        $("motion_width").value = cfg.motion_width || 640;
+        $("motion_height").value = cfg.motion_height || 360;
+        $("motion_fps").value = cfg.motion_fps || 12;
+        $("motion_default_format").value = cfg.motion_default_format || "gif";
+        $("motionFormat").value = cfg.motion_default_format || "gif";
+        $("motion_max_duration").value = cfg.motion_max_duration || 15;
+        $("motion_max_frames").value = cfg.motion_max_frames || 360;
+        $("motion_max_dimension").value = cfg.motion_max_dimension || 1280;
+        $("motion_max_file_mb").value = cfg.motion_max_file_mb || 20;
+        $("motion_max_concurrency").value = cfg.motion_max_concurrency || 1;
+        $("motion_video_as_file").checked = !!cfg.motion_video_as_file;
         fillSvgSample();
+        fillMotionSample();
       } catch (e) {
         setStatus("加载配置失败：" + (e.message || e), "err");
       }

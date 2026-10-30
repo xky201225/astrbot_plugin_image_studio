@@ -212,5 +212,105 @@
       "step": 64
     },
     "hint": "防止过大 SVG 占用内存；超出时会等比缩小。"
+  },
+  "motion_default_format": {
+    "description": "动画默认输出格式",
+    "type": "string",
+    "default": "gif",
+    "options": [
+      "gif",
+      "webp",
+      "mp4"
+    ],
+    "hint": "gif 适合聊天平台直接显示；mp4 更适合较长或较复杂的动画；webp 体积较小但平台支持不一。"
+  },
+  "motion_width": {
+    "description": "动画默认宽度",
+    "type": "int",
+    "default": 640,
+    "slider": {
+      "min": 240,
+      "max": 1280,
+      "step": 2
+    }
+  },
+  "motion_height": {
+    "description": "动画默认高度",
+    "type": "int",
+    "default": 360,
+    "slider": {
+      "min": 240,
+      "max": 1280,
+      "step": 2
+    }
+  },
+  "motion_fps": {
+    "description": "动画默认帧率",
+    "type": "int",
+    "default": 12,
+    "slider": {
+      "min": 5,
+      "max": 24,
+      "step": 1
+    },
+    "hint": "GIF 建议 12 到 15 帧；MP4 可用 20 到 24 帧。"
+  },
+  "motion_max_duration": {
+    "description": "动画最大时长（秒）",
+    "type": "int",
+    "default": 15,
+    "slider": {
+      "min": 2,
+      "max": 60,
+      "step": 1
+    }
+  },
+  "motion_max_frames": {
+    "description": "动画最大帧数",
+    "type": "int",
+    "default": 360,
+    "slider": {
+      "min": 10,
+      "max": 600,
+      "step": 10
+    },
+    "hint": "GIF/WebP 会自动限制在 180 帧以内。"
+  },
+  "motion_max_dimension": {
+    "description": "动画最大边长",
+    "type": "int",
+    "default": 1280,
+    "slider": {
+      "min": 240,
+      "max": 4096,
+      "step": 64
+    }
+  },
+  "motion_max_file_mb": {
+    "description": "动画最大文件大小（MB）",
+    "type": "int",
+    "default": 20,
+    "slider": {
+      "min": 1,
+      "max": 100,
+      "step": 1
+    }
+  },
+  "motion_video_as_file": {
+    "description": "MP4 以文件形式发送",
+    "type": "bool",
+    "default": false,
+    "hint": "部分平台视频上传受限时，可开启后以文件发送。"
+  },
+  "motion_max_concurrency": {
+    "description": "动画最大并发渲染数",
+    "type": "int",
+    "default": 1,
+    "slider": {
+      "min": 1,
+      "max": 4,
+      "step": 1
+    },
+    "hint": "同时生成多个动画会占用较多 CPU，建议保持 1 到 2。"
   }
 }

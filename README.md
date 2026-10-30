@@ -1,16 +1,17 @@
 # 图像工坊 Image Studio
 
-为 AstrBot 提供多服务商 **文生图 / 图生图** 能力。用户只需配置服务地址（Base URL）与 API Key，即可测试、检测可用模型并保存配置；同时为机器人提供聊天指令和 AI 智能体工具。
+为 AstrBot 提供多服务商 **文生图 / 图生图**、本地 **SVG 绘图** 和 **动画说明** 能力。用户可配置服务地址与 API Key、检测模型并保存多个服务商档案，也可以让机器人用动画解释概念。
 
 ## 特性
 
 - 内置多家国内外 OpenAI 兼容图像服务提供商：OpenAI、apikey.fan 聚合、Packy / API.FAN（GPT-Image，含全球与优化线路）、硅基流动 SiliconFlow、智谱 BigModel、火山方舟（豆包），并支持完全自定义。
 - 配置后可在可视化设置页一键 **测试文生图 / 图生图**，测试通过后再保存。
 - 一键 **检测可用模型**（调用 `GET /models`），并下拉选择。
-- 聊天指令：`/文生图 <描述>`、`/t2i <描述>`、`/图生图 <描述>`、`/i2i <描述>`（图生图需附上一张参考图片）。
-- 向 AI 智能体注册 `text_to_image` 与 `image_to_image` 两个工具，机器人可在对话中按需调用并直接回图。
+- 聊天指令：`/文生图`、`/图生图`、`/svg绘图`、`/动画`，并提供英文别名。图生图需附参考图片；动画指令接收 JSON 脚本。
+- 向 AI 智能体注册 4 个工具：`text_to_image`、`image_to_image`、`svg_render`、`create_animation`，可分别生成 AI 图片、渲染 SVG 和生成说明动画。
 - 完整支持 apikey.fan 的 SSE 流式返回（`image_generation.completed` 事件）与多图 multipart 图生图。
 - 内置本地 SVG 绘图：用 SVG 代码绘制图表、示意图、图标和海报，渲染成 PNG 返回，不调用图像模型。
+- 内置本地 SVG 动画说明：把概念转成动画脚本，逐帧渲染并编码为 GIF、WebP 或 MP4，不调用视频模型。
 
 ### Packy / API.FAN（GPT-Image）
 
@@ -22,11 +23,51 @@
 - 输出格式通过 `output_format`（`png` / `jpeg` / `webp`）控制；`output_compression` 仅在 `jpeg` 时生效。
 - 控制台地址为 `https://www.packyapi.ai`，它只是网页控制台，不要填成 API 地址。
 
+## 动画说明（本地 SVG 动画）
+
+这是“机器人理解概念，工具本地渲染动画”的功能，不调用视频生成模型。
+
+- AI 工具：`create_animation`，智能体根据用户描述生成动画 JSON，工具逐帧绘制并回传 GIF/WebP/MP4。
+- 聊天指令：`/动画 <JSON 动画脚本>`；发送 `/动画` 或 `/动画 帮助` 查看示例。
+- 支持模式：
+  - `flow`：流程、因果、序列图（如 TCP 三次握手）
+  - `timeline`：时间线、里程碑
+  - `cycle`：循环过程（如水循环、碳循环）
+  - `comparison`：左右对比
+  - `text`：文字淡入、滑入、打字机、霓虹
+  - `chart`：柱状图、折线图
+  - `slideshow`：消息中附带的多张图片轮播
+- 输出格式：GIF（短动画，聊天直接显示）、WebP（体积较小）、MP4（较长或较复杂）。
+- 默认 640×360、12 帧，适合聊天 GIF；需要更高清晰度时可在设置或动画脚本中调整。
+- 设置视图中有动画 JSON 编辑器、模式示例、尺寸/帧率/时长设置和预览。
+
+`flow` 示例：
+
+```json
+{
+  "pattern": "flow",
+  "title": "TCP 三次握手",
+  "actors": [
+    { "id": "client", "label": "客户端" },
+    { "id": "server", "label": "服务器" }
+  ],
+  "steps": [
+    { "from": "client", "to": "server", "label": "SYN" },
+    { "from": "server", "to": "client", "label": "SYN + ACK" },
+    { "from": "client", "to": "server", "label": "ACK" }
+  ]
+}
+```
+
+也可以让机器人直接处理自然语言，例如：“用动画解释一下 TCP 三次握手”“把这三张图做成轮播动画”。智能体会调用 `create_animation`。
+
+限制：GIF/WebP 默认最多 180 帧，MP4 默认最多 360 帧；最大时长、边长和文件大小可在设置中调整。渲染是本地 CPU 任务，会限制并发和输出大小。
+
 ## 安装
 
 将本目录放入 AstrBot 的 `data/plugins/` 下（目录名保持 `astrbot_plugin_image_studio`），然后在 WebUI「插件」页启用并重载。
 
-依赖：`httpx`、`resvg-py`（已写入 `requirements.txt`，AstrBot 会自动安装）。如果更新后在日志中看到缺少 `resvg-py`，重启一次 AstrBot 或在该 Python 环境执行 `pip install resvg-py`。
+依赖：`httpx`、`resvg-py`、`Pillow`、`imageio-ffmpeg`（已写入 `requirements.txt`，AstrBot 会自动安装）。如果更新后在日志中看到缺少依赖，重启一次 AstrBot 或执行 `pip install -r requirements.txt`。
 
 ## 多配置切换
 
@@ -92,6 +133,7 @@ astrbot_plugin_image_studio/
 ├─ providers.py       # 提供商预设
 ├─ profiles.py        # 多配置档案存储与迁移
 ├─ svg_tool.py        # SVG 校验、清理与本地光栅化
+├─ motion_tool.py     # 声明式动画渲染与 GIF/WebP/MP4 编码
 ├─ _conf_schema.json  # 全局配置 Schema
 ├─ metadata.yaml      # 插件元数据
 ├─ requirements.txt

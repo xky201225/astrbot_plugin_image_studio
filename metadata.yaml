@@ -1,6 +1,6 @@
 name: astrbot_plugin_image_studio
-desc: 多服务商文生图、图生图与本地 SVG 绘图工具。可同时保存多个服务商配置并一键切换，支持测试与检测可用模型，并把 SVG 本地渲染为 PNG。
-short_desc: 多服务商 AI 绘图 + 本地 SVG 绘图
+desc: 多服务商文生图、图生图、本地 SVG 绘图与动画说明工具。可保存多个服务商配置并切换，支持把概念脚本本地渲染为 GIF/WebP/MP4。
+short_desc: 多服务商 AI 绘图 + SVG 绘图与动画
 display_name: 图像工坊 Image Studio
 author: Codex
-version: 1.2.0
+version: 1.2.1

@@ -11,19 +11,21 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import time
 from pathlib import Path
 
 import httpx
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageEventResult, filter
-from astrbot.api.message_components import Image, Reply
+from astrbot.api.message_components import File, Image, Reply, Video
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request
 from astrbot.core.star.filter.command import GreedyStr
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .client import ImageProviderError, generate_image, list_models
+from .motion_tool import MotionError, render_animation
 from .profiles import ProfileStore
 from .providers import PROVIDERS, PROVIDER_IDS, resolve_provider
 from .svg_tool import SVGError, render_svg_to_png
@@ -39,6 +41,16 @@ GLOBAL_KEYS = [
     "svg_height",
     "svg_background",
     "svg_max_dimension",
+    "motion_default_format",
+    "motion_width",
+    "motion_height",
+    "motion_fps",
+    "motion_max_duration",
+    "motion_max_frames",
+    "motion_max_dimension",
+    "motion_max_file_mb",
+    "motion_video_as_file",
+    "motion_max_concurrency",
 ]
 
 _MIME_EXT = {
@@ -47,6 +59,18 @@ _MIME_EXT = {
     "image/webp": "webp",
     "image/gif": "gif",
 }
+
+ANIMATION_HELP = """用本地 SVG 动画解释概念。支持 flow、timeline、cycle、comparison、text、chart、slideshow。
+自然语言直接告诉 AI 即可；手动指令请提供 JSON，例如：
+{"pattern":"flow","title":"TCP 三次握手","actors":[{"id":"client","label":"客户端"},{"id":"server","label":"服务器"}],"steps":[{"from":"client","to":"server","label":"SYN"},{"from":"server","to":"client","label":"SYN + ACK"},{"from":"client","to":"server","label":"ACK"}]}
+可选 format: gif、webp、mp4。slideshow 需要附带图片。"""
+
+
+def unwrap_motion_spec(spec):
+    """兼容部分模型把动画脚本包在 {"spec": {...}} 中的写法。"""
+    if isinstance(spec, dict) and not spec.get("pattern") and isinstance(spec.get("spec"), dict):
+        return spec["spec"]
+    return spec
 
 
 def resolve_config(config: dict) -> dict:
@@ -107,6 +131,7 @@ class ImageStudioPlugin(Star):
 
         self.profile_store = ProfileStore(self._data_dir())
         self.profile_store.ensure_from_legacy(dict(self.config))
+        self._motion_semaphore: asyncio.Semaphore | None = None
 
         self._register_web_apis()
         logger.info(f"{PLUGIN_NAME} 已加载。")
@@ -243,6 +268,66 @@ class ImageStudioPlugin(Star):
         target.write_bytes(png)
         return target
 
+    def _motion_defaults(self) -> dict:
+        return {
+            "format": str(self.config.get("motion_default_format") or "gif"),
+            "width": int(self.config.get("motion_width") or 640),
+            "height": int(self.config.get("motion_height") or 360),
+            "fps": int(self.config.get("motion_fps") or 12),
+            "max_duration": float(self.config.get("motion_max_duration") or 15),
+            "max_frames": int(self.config.get("motion_max_frames") or 360),
+            "max_dimension": int(self.config.get("motion_max_dimension") or 1280),
+            "max_file_mb": int(self.config.get("motion_max_file_mb") or 20),
+        }
+
+    def _cleanup_motion_outputs(self, max_age_hours: int = 24) -> None:
+        out_dir = self._data_dir() / "outputs"
+        if not out_dir.exists():
+            return
+        cutoff = time.time() - max_age_hours * 3600
+        for path in out_dir.glob("motion_*"):
+            try:
+                if path.is_file() and path.stat().st_mtime < cutoff:
+                    path.unlink()
+            except OSError:
+                continue
+
+    async def _render_motion(
+        self, spec: dict, event: AstrMessageEvent | None = None
+    ) -> dict:
+        if self._motion_semaphore is None:
+            self._motion_semaphore = asyncio.Semaphore(
+                max(1, min(4, int(self.config.get("motion_max_concurrency") or 1)))
+            )
+        images = await self._gather_image_paths(event, limit=12) if event else []
+        out_dir = self._data_dir() / "outputs"
+        self._cleanup_motion_outputs()
+        async with self._motion_semaphore:
+            return await asyncio.to_thread(
+                render_animation,
+                spec,
+                out_dir,
+                images,
+                self._motion_defaults(),
+            )
+
+    def _send_motion(self, event: AstrMessageEvent, result: dict):
+        path = Path(result["path"])
+        fmt = result["format"]
+        force_file = bool(result.get("send_as_file")) or (
+            fmt == "mp4" and bool(self.config.get("motion_video_as_file"))
+        )
+        if force_file:
+            yield event.chain_result([File(file=str(path), name=path.name)])
+        elif fmt == "mp4":
+            yield event.chain_result([Video.fromFileSystem(str(path))])
+        else:
+            yield event.image_result(str(path))
+        if result.get("caption", True):
+            yield event.plain_result(
+                f"已生成 {result['duration']:.1f} 秒、{result['width']}×{result['height']} 的 {fmt.upper()} 动画。"
+            )
+
     # ------------------------------------------------------------------ #
     # 聊天指令
     # ------------------------------------------------------------------ #
@@ -373,6 +458,80 @@ class ImageStudioPlugin(Star):
         except Exception as exc:  # noqa: BLE001
             yield event.plain_result(f"SVG 绘图失败：{exc}")
 
+    @filter.command("动画", alias={"animation", "motion"})
+    async def cmd_animation(self, event: AstrMessageEvent, spec_text: GreedyStr):
+        """动画说明指令：/动画 <JSON 动画脚本>。自然语言可由 AI 调用 create_animation。"""
+        if not self.config.get("allow_commands", True):
+            yield event.plain_result("动画指令未启用，请先在插件配置中开启。")
+            return
+        if not self._check_allowed(event):
+            yield event.plain_result("你没有使用该指令的权限。")
+            return
+        text = (spec_text or "").strip()
+        if not text or text.lower() in ("帮助", "help", "?"):
+            yield event.plain_result(ANIMATION_HELP)
+            return
+        try:
+            spec = json.loads(text)
+        except json.JSONDecodeError as exc:
+            yield event.plain_result(
+                f"动画脚本不是合法 JSON：{exc}\n发送 /动画 帮助 查看示例。"
+            )
+            return
+        if not isinstance(spec, dict):
+            yield event.plain_result("动画脚本必须是 JSON 对象。")
+            return
+        spec = unwrap_motion_spec(spec)
+        yield event.plain_result("正在生成动画，请稍候…")
+        try:
+            result = await self._render_motion(spec, event)
+            for item in self._send_motion(event, result):
+                yield item
+        except Exception as exc:  # noqa: BLE001
+            yield event.plain_result(f"动画生成失败：{exc}")
+
+    @filter.llm_tool(name="create_animation")
+    async def create_animation(self, event: AstrMessageEvent, spec: dict) -> MessageEventResult:
+        """用本地 SVG 动画解释一个概念，并把 GIF/WebP/MP4 直接发送给用户。
+
+        不要调用文生视频模型。你负责把用户描述转成动画脚本，工具负责逐帧渲染和编码。
+        先判断用户想解释的是流程、时间顺序、循环、对比、文字强调、数据还是图片轮播，再选择 pattern。
+        每个动画保持 3 到 6 个关键节点，节点标签尽量简短（2 到 10 个字），不要堆叠大量元素。
+        默认 format=gif；预计超过 8 秒或内容较复杂时用 mp4。slideshow 只在用户提供了图片时使用。
+        pattern 可选：
+        - flow: 流程/因果，需要 actors[{id,label}] 和 steps[{from,to,label,description}]
+        - timeline: 时间线，需要 events[{time,label,description}]
+        - cycle: 循环，需要 nodes["蒸发","凝结",...] 和可选 center
+        - comparison: 对比，需要 left{title,items} 与 right{title,items}
+        - text: 文字动效，需要 lines["第一行",...] 和可选 style(fade/slide/typewriter/neon)
+        - chart: 图表，需要 chart_type(bar/line)、labels、values 或 series[{name,values}]
+        - slideshow: 图片轮播，使用当前消息附带的图片，可选 transition(fade/slide/zoom)
+        通用字段：title、subtitle、format(gif/webp/mp4)、width、height、fps、duration、theme(dark/light/ocean/sunset)、accent、background、loop、send_as_file(平台不支持视频时以文件发送)、caption(是否附带生成摘要)。
+        示例：{"pattern":"flow","title":"TCP 三次握手","actors":[{"id":"client","label":"客户端"},{"id":"server","label":"服务器"}],"steps":[{"from":"client","to":"server","label":"SYN"},{"from":"server","to":"client","label":"SYN + ACK"},{"from":"client","to":"server","label":"ACK"}]}
+
+        Args:
+            spec(object): 完整的动画 JSON 脚本。
+        """
+        if not self.config.get("register_llm_tools", True):
+            yield event.plain_result("动画工具未启用，请先在插件配置中开启。")
+            return
+        if isinstance(spec, str):
+            try:
+                spec = json.loads(spec)
+            except json.JSONDecodeError as exc:
+                yield event.plain_result(f"动画脚本不是合法 JSON：{exc}")
+                return
+        if not isinstance(spec, dict):
+            yield event.plain_result("动画脚本必须是 JSON 对象。")
+            return
+        spec = unwrap_motion_spec(spec)
+        try:
+            result = await self._render_motion(spec, event)
+            for item in self._send_motion(event, result):
+                yield item
+        except Exception as exc:  # noqa: BLE001
+            yield event.plain_result(f"动画生成失败：{exc}")
+
     # ------------------------------------------------------------------ #
     # 可视化设置页后端 API
     # ------------------------------------------------------------------ #
@@ -410,6 +569,9 @@ class ImageStudioPlugin(Star):
         self.context.register_web_api(
             f"/{PLUGIN_NAME}/svg/render", self.api_svg_render, ["POST"], "渲染 SVG 为 PNG"
         )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/animation/render", self.api_animation_render, ["POST"], "渲染动画"
+        )
 
     async def api_providers(self):
         return json_response({"providers": PROVIDERS, "ids": PROVIDER_IDS})
@@ -445,6 +607,27 @@ class ImageStudioPlugin(Star):
             self.config["svg_max_dimension"] = 4096
         self.config["svg_background"] = (
             str(self.config.get("svg_background") or "#ffffff").strip() or "#ffffff"
+        )
+        if self.config.get("motion_default_format") not in ("gif", "webp", "mp4"):
+            self.config["motion_default_format"] = "gif"
+        for key, default, low, high in (
+            ("motion_width", 640, 240, 1280),
+            ("motion_height", 360, 240, 1280),
+            ("motion_fps", 12, 5, 24),
+            ("motion_max_duration", 15, 2, 60),
+            ("motion_max_frames", 360, 10, 600),
+            ("motion_max_dimension", 1280, 240, 4096),
+            ("motion_max_file_mb", 20, 1, 100),
+            ("motion_max_concurrency", 1, 1, 4),
+        ):
+            try:
+                self.config[key] = max(
+                    low, min(high, int(self.config.get(key) or default))
+                )
+            except (TypeError, ValueError):
+                self.config[key] = default
+        self.config["motion_video_as_file"] = bool(
+            self.config.get("motion_video_as_file")
         )
         await self.config.save_config_async()
         return json_response(
@@ -601,6 +784,39 @@ class ImageStudioPlugin(Star):
                 "b64": base64.b64encode(png).decode(),
                 "width": out_w,
                 "height": out_h,
+            }
+        )
+
+    async def api_animation_render(self):
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("动画脚本必须是 JSON 对象", status_code=400)
+        payload = unwrap_motion_spec(payload)
+        try:
+            result = await self._render_motion(payload)
+        except MotionError as exc:
+            return error_response(str(exc), status_code=400)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Animation render failed")
+            return error_response(f"动画渲染失败：{exc}", status_code=500)
+        path = Path(result["path"])
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            return error_response(f"读取动画文件失败：{exc}", status_code=500)
+        finally:
+            path.unlink(missing_ok=True)
+        return json_response(
+            {
+                "ok": True,
+                "b64": base64.b64encode(data).decode(),
+                "mime": result["mime"],
+                "filename": Path(result["path"]).name,
+                "width": result["width"],
+                "height": result["height"],
+                "frames": result["frames"],
+                "duration": result["duration"],
+                "size_bytes": result["size_bytes"],
             }
         )
 
