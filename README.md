@@ -10,6 +10,7 @@
 - 聊天指令：`/文生图 <描述>`、`/t2i <描述>`、`/图生图 <描述>`、`/i2i <描述>`（图生图需附上一张参考图片）。
 - 向 AI 智能体注册 `text_to_image` 与 `image_to_image` 两个工具，机器人可在对话中按需调用并直接回图。
 - 完整支持 apikey.fan 的 SSE 流式返回（`image_generation.completed` 事件）与多图 multipart 图生图。
+- 内置本地 SVG 绘图：用 SVG 代码绘制图表、示意图、图标和海报，渲染成 PNG 返回，不调用图像模型。
 
 ### Packy / API.FAN（GPT-Image）
 
@@ -25,7 +26,7 @@
 
 将本目录放入 AstrBot 的 `data/plugins/` 下（目录名保持 `astrbot_plugin_image_studio`），然后在 WebUI「插件」页启用并重载。
 
-依赖：`httpx`（已写入 `requirements.txt`，AstrBot 会自动安装）。
+依赖：`httpx`、`resvg-py`（已写入 `requirements.txt`，AstrBot 会自动安装）。如果更新后在日志中看到缺少 `resvg-py`，重启一次 AstrBot 或在该 Python 环境执行 `pip install resvg-py`。
 
 ## 多配置切换
 
@@ -34,6 +35,33 @@
 - 点击「设为当前」决定机器人实际使用哪一个档案；聊天指令和 AI 智能体工具都会使用当前档案。
 - 档案保存在 `data/plugin_data/astrbot_plugin_image_studio/profiles.json`，重装或更新插件不会覆盖。
 - 该文件包含 API Key，请妥善保护，不要公开分享。
+
+## SVG 绘图（本地渲染）
+
+这是本地矢量绘图，不调用文生图/图生图模型：
+
+- 聊天指令：`/svg绘图 <完整 SVG 代码>`，也可以直接附带一个 `.svg` 文件。
+- AI 工具：`svg_render`，智能体传入完整 SVG 文档后由本机渲染并回图。
+- 设置视图中有 SVG 编辑器、尺寸/背景设置和「渲染预览」。
+- 渲染由 `resvg-py` 完成，不需要 Cairo 或浏览器。
+- 为安全起见，会拒绝 `<script>`、`foreignObject`、外部 `http/file` 引用，并清理 `on*` 事件属性。
+- 默认最大输出边长为 4096，可在设置中调整；超出时会等比缩小。
+- 中文文字依赖系统字体，若部署环境缺少 CJK 字体，可能出现方框或乱码。
+
+最小示例：
+
+```html
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="360" viewBox="0 0 600 360">
+  <rect width="600" height="360" rx="24" fill="#eef2ff"/>
+  <text x="40" y="110" fill="#1e1b4b" font-family="sans-serif" font-size="42">Hello SVG</text>
+</svg>
+```
+
+在聊天中可以发送：
+
+```text
+/svg绘图 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="360" viewBox="0 0 600 360"><rect width="600" height="360" rx="24" fill="#eef2ff"/><text x="40" y="110" fill="#1e1b4b" font-family="sans-serif" font-size="42">Hello SVG</text></svg>
+```
 
 ## 使用
 
@@ -63,6 +91,7 @@ astrbot_plugin_image_studio/
 ├─ client.py          # 图像接口客户端（含 SSE 解析）
 ├─ providers.py       # 提供商预设
 ├─ profiles.py        # 多配置档案存储与迁移
+├─ svg_tool.py        # SVG 校验、清理与本地光栅化
 ├─ _conf_schema.json  # 全局配置 Schema
 ├─ metadata.yaml      # 插件元数据
 ├─ requirements.txt

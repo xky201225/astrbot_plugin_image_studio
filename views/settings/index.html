@@ -54,6 +54,13 @@
       .grid .full { grid-column: 1 / -1; }
       .field { display: flex; flex-direction: column; gap: 6px; }
       label { font-size: 12px; color: var(--muted); }
+      code {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 12px;
+        background: var(--border);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
       input, select, textarea {
         background: var(--input-bg);
         color: var(--text);
@@ -282,6 +289,43 @@
         </div>
         <div id="status" class="status"></div>
         <div id="preview" class="preview"></div>
+      </section>
+
+      <section class="card">
+        <h2>SVG 绘图（本地渲染）</h2>
+        <p class="hint" style="margin-top:-4px;">
+          用 SVG 代码绘制图表、示意图、图标和海报，由本机渲染成 PNG，不调用图像模型。
+          聊天中可用 <code>/svg绘图</code>，AI 可调用 <code>svg_render</code>。
+        </p>
+        <div class="field" style="margin-top:12px;">
+          <label for="svgSource">SVG 代码</label>
+          <textarea id="svgSource" spellcheck="false"
+            style="min-height:170px; font-family: ui-monospace, Consolas, monospace; font-size:12px;"></textarea>
+        </div>
+        <div class="grid" style="margin-top:12px;">
+          <div class="field">
+            <label for="svg_width">默认宽度（0=自动）</label>
+            <input id="svg_width" type="number" min="0" max="8192" step="1" value="0" />
+          </div>
+          <div class="field">
+            <label for="svg_height">默认高度（0=自动）</label>
+            <input id="svg_height" type="number" min="0" max="8192" step="1" value="0" />
+          </div>
+          <div class="field">
+            <label for="svg_background">背景色</label>
+            <input id="svg_background" value="#ffffff" placeholder="#ffffff 或 transparent" />
+          </div>
+          <div class="field">
+            <label for="svg_max_dimension">最大边长</label>
+            <input id="svg_max_dimension" type="number" min="64" max="8192" step="64" value="4096" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button id="render_svg" class="primary" type="button">渲染预览</button>
+          <button id="fill_sample" class="secondary" type="button">填入示例</button>
+          <span class="hint" id="svgHint"></span>
+        </div>
+        <div id="svgPreview" class="preview"></div>
       </section>
 
       <section class="card">
@@ -582,6 +626,10 @@
           await bridge.apiPost("config/save", {
             allow_commands: $("allow_commands").checked,
             register_llm_tools: $("register_llm_tools").checked,
+            svg_width: parseInt($("svg_width").value, 10) || 0,
+            svg_height: parseInt($("svg_height").value, 10) || 0,
+            svg_background: $("svg_background").value.trim() || "#ffffff",
+            svg_max_dimension: parseInt($("svg_max_dimension").value, 10) || 4096,
           });
           applyProfilesResult(res, res.saved_id);
           $("saveHint").textContent = "已保存";
@@ -643,6 +691,50 @@
         });
       }
 
+      const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480">
+  <rect width="800" height="480" rx="24" fill="#eef2ff"/>
+  <circle cx="650" cy="120" r="70" fill="#4f46e5" opacity="0.2"/>
+  <text x="60" y="180" fill="#1e1b4b" font-family="sans-serif" font-size="54" font-weight="700">SVG 绘图</text>
+  <text x="62" y="230" fill="#4f46e5" font-family="sans-serif" font-size="24">本地渲染 · 无需 AI 图片模型</text>
+  <rect x="60" y="290" width="680" height="12" rx="6" fill="#c7d2fe"/>
+  <rect x="60" y="320" width="480" height="12" rx="6" fill="#a5b4fc"/>
+  <rect x="60" y="350" width="300" height="12" rx="6" fill="#818cf8"/>
+</svg>`;
+
+      function fillSvgSample() {
+        $("svgSource").value = SAMPLE_SVG;
+      }
+
+      async function renderSvgPreview() {
+        const svg = $("svgSource").value.trim();
+        if (!svg) {
+          $("svgHint").textContent = "请先填写 SVG 代码";
+          return;
+        }
+        $("svgHint").textContent = "正在渲染…";
+        $("svgPreview").className = "preview";
+        $("svgPreview").innerHTML = "";
+        try {
+          const res = await bridge.apiPost("svg/render", {
+            svg,
+            width: parseInt($("svg_width").value, 10) || 0,
+            height: parseInt($("svg_height").value, 10) || 0,
+            background: $("svg_background").value.trim() || "#ffffff",
+            max_dimension: parseInt($("svg_max_dimension").value, 10) || 4096,
+          });
+          const el = document.createElement("img");
+          el.src = "data:" + (res.mime || "image/png") + ";base64," + res.b64;
+          $("svgPreview").className = "preview show";
+          $("svgPreview").appendChild(el);
+          $("svgHint").textContent = "渲染成功：" + res.width + "×" + res.height;
+        } catch (e) {
+          $("svgHint").textContent = "渲染失败：" + (e.message || e);
+        }
+      }
+
+      $("fill_sample").addEventListener("click", fillSvgSample);
+      $("render_svg").addEventListener("click", renderSvgPreview);
+
       try {
         const [pRes, profilesRes, configRes] = await Promise.all([
           bridge.apiGet("providers"),
@@ -666,6 +758,11 @@
         const cfg = configRes.config || {};
         $("allow_commands").checked = cfg.allow_commands !== false;
         $("register_llm_tools").checked = cfg.register_llm_tools !== false;
+        $("svg_width").value = cfg.svg_width || 0;
+        $("svg_height").value = cfg.svg_height || 0;
+        $("svg_background").value = cfg.svg_background || "#ffffff";
+        $("svg_max_dimension").value = cfg.svg_max_dimension || 4096;
+        fillSvgSample();
       } catch (e) {
         setStatus("加载配置失败：" + (e.message || e), "err");
       }

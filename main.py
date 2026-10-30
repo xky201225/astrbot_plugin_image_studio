@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 from .client import ImageProviderError, generate_image, list_models
 from .profiles import ProfileStore
 from .providers import PROVIDERS, PROVIDER_IDS, resolve_provider
+from .svg_tool import SVGError, render_svg_to_png
 
 PLUGIN_NAME = "astrbot_plugin_image_studio"
 
@@ -33,6 +35,10 @@ GLOBAL_KEYS = [
     "allow_commands",
     "register_llm_tools",
     "allowed_users",
+    "svg_width",
+    "svg_height",
+    "svg_background",
+    "svg_max_dimension",
 ]
 
 _MIME_EXT = {
@@ -191,6 +197,52 @@ class ImageStudioPlugin(Star):
             raise ImageProviderError("图片生成成功但保存失败")
         return paths
 
+    async def _extract_svg_input(self, event: AstrMessageEvent, text: str) -> str:
+        """优先使用指令后的 SVG 文本，否则读取消息中的 .svg 文件。"""
+        source = (text or "").strip()
+        if source:
+            return source
+
+        found: list = []
+
+        def walk(items):
+            for comp in items or []:
+                type_text = str(getattr(comp, "type", "")).lower()
+                class_name = comp.__class__.__name__.lower()
+                if "file" in type_text or class_name == "file":
+                    found.append(comp)
+                elif getattr(comp, "chain", None):
+                    walk(comp.chain)
+
+        walk(event.get_messages())
+        for comp in found:
+            name = str(getattr(comp, "name", "") or getattr(comp, "file", "") or "")
+            if not name.lower().endswith(".svg"):
+                continue
+            converter = getattr(comp, "convert_to_file_path", None)
+            if not converter:
+                continue
+            try:
+                path = await converter()
+                return Path(path).read_text(encoding="utf-8")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"读取 SVG 文件失败：{exc}")
+        return ""
+
+    async def _render_svg_and_save(self, svg: str) -> Path:
+        width = int(self.config.get("svg_width") or 0)
+        height = int(self.config.get("svg_height") or 0)
+        background = str(self.config.get("svg_background") or "#ffffff")
+        max_dim = int(self.config.get("svg_max_dimension") or 4096)
+        png, _out_w, _out_h = await asyncio.to_thread(
+            render_svg_to_png, svg, width, height, background, max_dim
+        )
+        out_dir = self._data_dir() / "outputs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        target = out_dir / f"svg_{int(time.time() * 1000)}.png"
+        target.write_bytes(png)
+        return target
+
     # ------------------------------------------------------------------ #
     # 聊天指令
     # ------------------------------------------------------------------ #
@@ -283,6 +335,44 @@ class ImageStudioPlugin(Star):
         except Exception as exc:  # noqa: BLE001
             yield event.plain_result(f"图生图失败：{exc}")
 
+    @filter.command("svg绘图", alias={"svgdraw", "矢量绘图"})
+    async def cmd_svg_draw(self, event: AstrMessageEvent, svg: GreedyStr):
+        """SVG 绘图指令：/svg绘图 <完整 SVG 代码>，或附带 .svg 文件。"""
+        if not self.config.get("allow_commands", True):
+            yield event.plain_result("SVG 绘图指令未启用，请先在插件配置中开启。")
+            return
+        if not self._check_allowed(event):
+            yield event.plain_result("你没有使用该指令的权限。")
+            return
+        source = await self._extract_svg_input(event, svg)
+        if not source:
+            yield event.plain_result(
+                "请提供完整 SVG 代码，例如 /svg绘图 <svg xmlns=...>，或附带一个 .svg 文件。"
+            )
+            return
+        yield event.plain_result("正在渲染 SVG…")
+        try:
+            path = await self._render_svg_and_save(source)
+            yield event.image_result(str(path))
+        except Exception as exc:  # noqa: BLE001
+            yield event.plain_result(f"SVG 绘图失败：{exc}")
+
+    @filter.llm_tool(name="svg_render")
+    async def svg_render(self, event: AstrMessageEvent, svg: str) -> MessageEventResult:
+        """把完整 SVG 代码渲染成 PNG 图片并直接发送，用于流程图、图表、示意图、图标和海报等本地矢量绘图。
+
+        Args:
+            svg(string): 完整的 SVG 文档，必须包含根节点 <svg>、xmlns、width、height 和 viewBox。
+        """
+        if not self.config.get("register_llm_tools", True):
+            yield event.plain_result("SVG 绘图工具未启用，请先在插件配置中开启。")
+            return
+        try:
+            path = await self._render_svg_and_save(svg)
+            yield event.image_result(str(path))
+        except Exception as exc:  # noqa: BLE001
+            yield event.plain_result(f"SVG 绘图失败：{exc}")
+
     # ------------------------------------------------------------------ #
     # 可视化设置页后端 API
     # ------------------------------------------------------------------ #
@@ -317,6 +407,9 @@ class ImageStudioPlugin(Star):
         self.context.register_web_api(
             f"/{PLUGIN_NAME}/profiles/test", self.api_profile_test, ["POST"], "测试配置档案"
         )
+        self.context.register_web_api(
+            f"/{PLUGIN_NAME}/svg/render", self.api_svg_render, ["POST"], "渲染 SVG 为 PNG"
+        )
 
     async def api_providers(self):
         return json_response({"providers": PROVIDERS, "ids": PROVIDER_IDS})
@@ -339,6 +432,20 @@ class ImageStudioPlugin(Star):
         )
         if not isinstance(self.config.get("allowed_users"), list):
             self.config["allowed_users"] = []
+        for key in ("svg_width", "svg_height"):
+            try:
+                self.config[key] = max(0, min(8192, int(self.config.get(key) or 0)))
+            except (TypeError, ValueError):
+                self.config[key] = 0
+        try:
+            self.config["svg_max_dimension"] = max(
+                64, min(8192, int(self.config.get("svg_max_dimension") or 4096))
+            )
+        except (TypeError, ValueError):
+            self.config["svg_max_dimension"] = 4096
+        self.config["svg_background"] = (
+            str(self.config.get("svg_background") or "#ffffff").strip() or "#ffffff"
+        )
         await self.config.save_config_async()
         return json_response(
             {
@@ -458,6 +565,42 @@ class ImageStudioPlugin(Star):
                 "ok": True,
                 "profiles": data["profiles"],
                 "active_id": data["active_id"],
+            }
+        )
+
+    async def api_svg_render(self):
+        payload = await request.json(default={})
+        svg = str(payload.get("svg") or "").strip()
+        if not svg:
+            return error_response("请提供 SVG 代码", status_code=400)
+        try:
+            width = int(payload.get("width") or self.config.get("svg_width") or 0)
+            height = int(payload.get("height") or self.config.get("svg_height") or 0)
+            max_dim = int(
+                payload.get("max_dimension")
+                or self.config.get("svg_max_dimension")
+                or 4096
+            )
+        except (TypeError, ValueError):
+            return error_response("宽度、高度或最大边长必须是整数", status_code=400)
+        background = str(
+            payload.get("background")
+            or self.config.get("svg_background")
+            or "#ffffff"
+        )
+        try:
+            png, out_w, out_h = await asyncio.to_thread(
+                render_svg_to_png, svg, width, height, background, max_dim
+            )
+        except SVGError as exc:
+            return error_response(str(exc), status_code=400)
+        return json_response(
+            {
+                "ok": True,
+                "mime": "image/png",
+                "b64": base64.b64encode(png).decode(),
+                "width": out_w,
+                "height": out_h,
             }
         )
 

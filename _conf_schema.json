@@ -173,5 +173,44 @@
     },
     "hint": "仅在 output_format=jpeg 时生效。",
     "invisible": true
+  },
+  "svg_width": {
+    "description": "SVG 默认宽度（0 表示按 SVG 自身尺寸）",
+    "type": "int",
+    "default": 0,
+    "slider": {
+      "min": 0,
+      "max": 8192,
+      "step": 1
+    },
+    "hint": "仅用于 SVG 绘图；0 表示不强制宽度，按 SVG 的 width/viewBox 计算。"
+  },
+  "svg_height": {
+    "description": "SVG 默认高度（0 表示按 SVG 自身尺寸）",
+    "type": "int",
+    "default": 0,
+    "slider": {
+      "min": 0,
+      "max": 8192,
+      "step": 1
+    },
+    "hint": "仅用于 SVG 绘图；0 表示不强制高度，按 SVG 的 height/viewBox 计算。"
+  },
+  "svg_background": {
+    "description": "SVG 默认背景色",
+    "type": "string",
+    "default": "#ffffff",
+    "hint": "填写 transparent 可输出透明背景的 PNG。"
+  },
+  "svg_max_dimension": {
+    "description": "SVG 最大输出边长",
+    "type": "int",
+    "default": 4096,
+    "slider": {
+      "min": 64,
+      "max": 8192,
+      "step": 64
+    },
+    "hint": "防止过大 SVG 占用内存；超出时会等比缩小。"
   }
 }
